@@ -1,0 +1,15 @@
+.orbit-images-container {
+  margin: 0 auto;
+  max-width: 100%;
+}
+
+.orbit-image-wrapper {
+  transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), border-color 0.3s ease;
+}
+
+.orbit-image-wrapper:hover {
+  transform: scale(1.15) !important;
+  border-color: rgba(255, 255, 255, 0.4) !important;
+  box-shadow: 0 15px 35px -5px rgba(0, 0, 0, 0.8), 0 0 12px rgba(255, 255, 255, 0.15) !important;
+  z-index: 50;
+}

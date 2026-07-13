@@ -1,14 +1,18 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { translations } from '../services/translations';
 
 interface AccessibilityContextType {
   theme: 'light' | 'dark';
   highContrast: boolean;
   largeText: boolean;
   speechSpeed: number;
+  language: string;
   toggleTheme: () => void;
   toggleHighContrast: () => void;
   toggleLargeText: () => void;
   setSpeechSpeed: (speed: number) => void;
+  setLanguage: (lang: string) => void;
+  t: (key: string) => string;
 }
 
 const AccessibilityContext = createContext<AccessibilityContextType | undefined>(undefined);
@@ -26,6 +30,9 @@ export const AccessibilityProvider: React.FC<{ children: React.ReactNode }> = ({
   const [speechSpeed, setSpeechSpeedState] = useState<number>(() => {
     const saved = localStorage.getItem('speechSpeed');
     return saved ? parseFloat(saved) : 1.0;
+  });
+  const [language, setLanguageState] = useState<string>(() => {
+    return localStorage.getItem('interfaceLanguage') || 'en';
   });
 
   useEffect(() => {
@@ -72,6 +79,16 @@ export const AccessibilityProvider: React.FC<{ children: React.ReactNode }> = ({
     localStorage.setItem('speechSpeed', String(clamped));
   };
 
+  const setLanguage = (lang: string) => {
+    setLanguageState(lang);
+    localStorage.setItem('interfaceLanguage', lang);
+  };
+
+  const t = (key: string): string => {
+    const langDict = translations[language] || translations['en'];
+    return langDict[key] || translations['en'][key] || key;
+  };
+
   return (
     <AccessibilityContext.Provider
       value={{
@@ -79,10 +96,13 @@ export const AccessibilityProvider: React.FC<{ children: React.ReactNode }> = ({
         highContrast,
         largeText,
         speechSpeed,
+        language,
         toggleTheme,
         toggleHighContrast,
         toggleLargeText,
         setSpeechSpeed,
+        setLanguage,
+        t,
       }}
     >
       {children}

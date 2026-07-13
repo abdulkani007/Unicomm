@@ -55,6 +55,9 @@ const Settings: React.FC = () => {
       if (data.speechSpeed !== undefined) {
         acc.setSpeechSpeed(data.speechSpeed);
       }
+      if (data.interfaceLanguage !== undefined) {
+        acc.setLanguage(data.interfaceLanguage);
+      }
       
       alert("Settings saved successfully.");
     },
@@ -68,7 +71,7 @@ const Settings: React.FC = () => {
   // Fallback to local settings context if API is loading or unavailable
   const currentSettings: UserSettings = serverSettings || {
     userId: 'local',
-    interfaceLanguage: localStorage.getItem('interfaceLanguage') || 'en',
+    interfaceLanguage: acc.language,
     speechSpeed: acc.speechSpeed,
     theme: acc.theme,
     highContrast: acc.highContrast,
@@ -79,7 +82,7 @@ const Settings: React.FC = () => {
   const handleSave = (field: keyof UserSettings, value: any) => {
     // If running offline or mock, we sync locally first
     if (field === 'interfaceLanguage') {
-      localStorage.setItem('interfaceLanguage', value);
+      acc.setLanguage(value);
     }
     if (field === 'cameraResolution') {
       localStorage.setItem('cameraResolution', value);

@@ -2,87 +2,38 @@ import logging
 import time
 from datetime import datetime
 from typing import List, Dict, Any, Optional
-from google.cloud import firestore
-import firebase_admin
-from app.config import settings
+from app.core.database import db
 
-logger = logging.getLogger("unicomm.firebase")
+logger = logging.getLogger("unicomm.database_repo")
 
 class FirestoreDB:
     def __init__(self):
-        self.db = None
-        self.is_mock = True
-        
-        # In-memory database fallback for mock mode
-        self._mock_store: Dict[str, Dict[str, Any]] = {
-            "users": {},
-            "settings": {},
-            "history": {},
-            "predictions": {},
-            "model_versions": {
-                "v1.0.0": {
-                    "version": "v1.0.0",
-                    "gcsPath": "models/sign_model_v1.0.0.h5",
-                    "accuracy": 0.942,
-                    "status": "active",
-                    "trainedAt": datetime.utcnow(),
-                    "description": "Initial sign language vocabulary model"
-                }
-            },
-            "analytics": {},
-            "notifications": {}
-        }
-        
-        # Initialize Firestore if firebase SDK was initialized
-        try:
-            cred_path = settings.FIREBASE_CREDENTIALS_PATH
-            if cred_path and not os.path.isabs(cred_path):
-                import app
-                base_dir = os.path.dirname(os.path.dirname(os.path.abspath(app.__file__)))
-                cred_path = os.path.join(base_dir, cred_path)
-
-            if cred_path and os.path.exists(cred_path):
-                from google.oauth2 import service_account
-                creds = service_account.Credentials.from_service_account_file(cred_path)
-                self.db = firestore.Client(project=settings.FIREBASE_PROJECT_ID, credentials=creds)
-                self.is_mock = False
-                logger.info(f"Firestore client initialized with service account key: {cred_path} for project: {settings.FIREBASE_PROJECT_ID}")
-            elif firebase_admin._apps:
-                self.db = firestore.Client(project=settings.FIREBASE_PROJECT_ID)
-                self.is_mock = False
-                logger.info(f"Firestore client initialized successfully for project: {settings.FIREBASE_PROJECT_ID}")
-            else:
-                logger.warning("Firebase app not initialized. Using IN-MEMORY MOCK DATABASE.")
-                self.db = None
-                self.is_mock = True
-        except Exception as e:
-            logger.warning(f"Failed to initialize Firestore client: {str(e)}. Using IN-MEMORY MOCK DATABASE.")
-            self.db = None
-            self.is_mock = True
+        # Always use the Atlas database connection directly
+        self.db = db
 
     # --- User Repository ---
     def get_user(self, uid: str) -> Optional[Dict[str, Any]]:
-        if self.is_mock:
-            return self._mock_store["users"].get(uid)
         try:
-            doc = self.db.collection("users").document(uid).get()
-            return doc.to_dict() if doc.exists else None
+            return self.db.users.find_one({"uid": uid}, {"_id": 0})
         except Exception as e:
-            logger.error(f"Firestore get_user error: {str(e)}")
-            return None
+            logger.error(f"MongoDB get_user error: {str(e)}")
+            raise e
 
     def create_or_update_user(self, uid: str, data: Dict[str, Any]) -> bool:
-        if self.is_mock:
-            user = self._mock_store["users"].get(uid, {})
-            user.update(data)
-            user["uid"] = uid
-            user["updatedAt"] = datetime.utcnow()
-            if "createdAt" not in user:
-                user["createdAt"] = datetime.utcnow()
-            self._mock_store["users"][uid] = user
+        try:
+            data["uid"] = uid
+            data["updatedAt"] = datetime.utcnow()
+            
+            # Find existing user to preserve createdAt
+            existing = self.db.users.find_one({"uid": uid})
+            if not existing:
+                data["createdAt"] = datetime.utcnow()
+                
+            self.db.users.update_one({"uid": uid}, {"$set": data}, upsert=True)
             
             # Auto-create default settings if none exist
-            if uid not in self._mock_store["settings"]:
+            existing_settings = self.db.settings.find_one({"userId": uid})
+            if not existing_settings:
                 self.create_or_update_settings(uid, {
                     "userId": uid,
                     "interfaceLanguage": "en",
@@ -93,36 +44,18 @@ class FirestoreDB:
                     "cameraResolution": "720p"
                 })
             return True
-        try:
-            doc_ref = self.db.collection("users").document(uid)
-            data["updatedAt"] = firestore.SERVER_TIMESTAMP
-            doc_ref.set(data, merge=True)
-            return True
         except Exception as e:
-            logger.error(f"Firestore create_or_update_user error: {str(e)}")
-            return False
+            logger.error(f"MongoDB create_or_update_user error: {str(e)}")
+            raise e
 
     # --- Settings Repository ---
     def get_settings(self, uid: str) -> Dict[str, Any]:
-        if self.is_mock:
-            if uid not in self._mock_store["settings"]:
-                # Initialize default settings
-                self._mock_store["settings"][uid] = {
-                    "userId": uid,
-                    "interfaceLanguage": "en",
-                    "speechSpeed": 1.0,
-                    "theme": "dark",
-                    "highContrast": False,
-                    "largeText": False,
-                    "cameraResolution": "720p",
-                    "updatedAt": datetime.utcnow()
-                }
-            return self._mock_store["settings"][uid]
         try:
-            doc = self.db.collection("settings").document(uid).get()
-            if doc.exists:
-                return doc.to_dict()
-            # Create default settings
+            doc = self.db.settings.find_one({"userId": uid}, {"_id": 0})
+            if doc:
+                return doc
+            
+            # Create default settings if not found
             default_settings = {
                 "userId": uid,
                 "interfaceLanguage": "en",
@@ -131,247 +64,218 @@ class FirestoreDB:
                 "highContrast": False,
                 "largeText": False,
                 "cameraResolution": "720p",
-                "updatedAt": firestore.SERVER_TIMESTAMP
+                "updatedAt": datetime.utcnow()
             }
-            self.db.collection("settings").document(uid).set(default_settings)
+            self.db.settings.update_one({"userId": uid}, {"$set": default_settings}, upsert=True)
             return default_settings
         except Exception as e:
-            logger.error(f"Firestore get_settings error: {str(e)}")
-            return {"userId": uid, "interfaceLanguage": "en", "speechSpeed": 1.0, "theme": "dark"}
+            logger.error(f"MongoDB get_settings error: {str(e)}")
+            raise e
 
     def create_or_update_settings(self, uid: str, data: Dict[str, Any]) -> bool:
-        if self.is_mock:
-            settings_doc = self._mock_store["settings"].get(uid, {})
-            settings_doc.update(data)
-            settings_doc["userId"] = uid
-            settings_doc["updatedAt"] = datetime.utcnow()
-            self._mock_store["settings"][uid] = settings_doc
-            return True
         try:
-            doc_ref = self.db.collection("settings").document(uid)
-            data["updatedAt"] = firestore.SERVER_TIMESTAMP
-            doc_ref.set(data, merge=True)
+            data["userId"] = uid
+            data["updatedAt"] = datetime.utcnow()
+            self.db.settings.update_one({"userId": uid}, {"$set": data}, upsert=True)
             return True
         except Exception as e:
-            logger.error(f"Firestore create_or_update_settings error: {str(e)}")
-            return False
+            logger.error(f"MongoDB create_or_update_settings error: {str(e)}")
+            raise e
 
     # --- History Repository ---
     def create_history(self, uid: str, data: Dict[str, Any]) -> str:
-        history_id = f"hist_{int(time.time() * 1000)}"
-        data["userId"] = uid
-        data["createdAt"] = datetime.utcnow() if self.is_mock else firestore.SERVER_TIMESTAMP
-        data["isSynced"] = True
-        
-        if self.is_mock:
-            data["id"] = history_id
-            self._mock_store["history"][history_id] = data
-            return history_id
         try:
-            doc_ref = self.db.collection("history").document()
-            data["id"] = doc_ref.id
-            doc_ref.set(data)
-            return doc_ref.id
+            history_id = f"hist_{int(time.time() * 1000)}"
+            data["userId"] = uid
+            data["createdAt"] = datetime.utcnow()
+            data["isSynced"] = True
+            data["id"] = history_id
+            
+            self.db.history.insert_one(data)
+            return history_id
         except Exception as e:
-            logger.error(f"Firestore create_history error: {str(e)}")
-            return ""
+            logger.error(f"MongoDB create_history error: {str(e)}")
+            raise e
 
     def get_histories(self, uid: str, limit: int = 50, offset: int = 0, search: str = "") -> List[Dict[str, Any]]:
-        if self.is_mock:
-            histories = [v for v in self._mock_store["history"].values() if v.get("userId") == uid]
-            # Simple keyword search
-            if search:
-                search_lower = search.lower()
-                histories = [
-                    h for h in histories 
-                    if search_lower in h.get("originalText", "").lower() 
-                    or search_lower in h.get("translatedText", "").lower()
-                ]
-            # Sort by createdAt desc
-            histories.sort(key=lambda x: x.get("createdAt"), reverse=True)
-            return histories[offset : offset + limit]
         try:
-            query = self.db.collection("history").where("userId", "==", uid)
-            # Firestore requires compound indexes for mixed search/order, so we filter programmatically if needed
-            # For scale, retrieve the document list ordered by createdAt
-            docs = query.order_by("createdAt", direction=firestore.Query.DESCENDING).limit(limit + offset).get()
-            histories = [doc.to_dict() for doc in docs]
-            
+            query = {"userId": uid}
             if search:
-                search_lower = search.lower()
-                histories = [
-                    h for h in histories 
-                    if search_lower in h.get("originalText", "").lower() 
-                    or search_lower in h.get("translatedText", "").lower()
+                query["$or"] = [
+                    {"originalText": {"$regex": search, "$options": "i"}},
+                    {"translatedText": {"$regex": search, "$options": "i"}}
                 ]
-                
-            return histories[offset : offset + limit]
+            
+            # Sort by createdAt descending
+            cursor = self.db.history.find(query, {"_id": 0}).sort("createdAt", -1).skip(offset).limit(limit)
+            return list(cursor)
         except Exception as e:
-            logger.error(f"Firestore get_histories error: {str(e)}")
-            return []
+            logger.error(f"MongoDB get_histories error: {str(e)}")
+            raise e
 
     def delete_history(self, history_id: str, uid: str) -> bool:
-        if self.is_mock:
-            if history_id in self._mock_store["history"] and self._mock_store["history"][history_id].get("userId") == uid:
-                del self._mock_store["history"][history_id]
-                return True
-            return False
         try:
-            doc_ref = self.db.collection("history").document(history_id)
-            doc = doc_ref.get()
-            if doc.exists and doc.to_dict().get("userId") == uid:
-                doc_ref.delete()
-                return True
-            return False
+            res = self.db.history.delete_one({"id": history_id, "userId": uid})
+            return res.deleted_count > 0
         except Exception as e:
-            logger.error(f"Firestore delete_history error: {str(e)}")
-            return False
+            logger.error(f"MongoDB delete_history error: {str(e)}")
+            raise e
 
     # --- Predictions & Analytics Repositories ---
     def create_prediction(self, uid: str, data: Dict[str, Any]) -> str:
-        pred_id = f"pred_{int(time.time() * 1000)}"
-        data["userId"] = uid
-        data["timestamp"] = datetime.utcnow() if self.is_mock else firestore.SERVER_TIMESTAMP
-        
-        if self.is_mock:
-            self._mock_store["predictions"][pred_id] = data
+        try:
+            prediction = data.get("predictedClass", "Unknown")
+            confidence = data.get("confidence", 0.0)
+            
+            if 0.0 < confidence <= 1.0:
+                confidence = confidence * 100.0
+                
+            doc = {
+                "user_id": uid,
+                "prediction": prediction,
+                "confidence": confidence,
+                "created_at": datetime.utcnow()
+            }
+            
+            res = self.db.prediction_history.insert_one(doc)
+            pred_id = str(res.inserted_id)
             
             # Increment daily analytics
             date_str = datetime.utcnow().strftime("%Y-%m-%d")
             self.increment_analytics(date_str, "totalPredictions", 1)
-            self.increment_analytics(date_str, "averageConfidence", data.get("confidence", 0.0))
-            return pred_id
-        try:
-            doc_ref = self.db.collection("predictions").document()
-            doc_ref.set(data)
+            self.increment_analytics(date_str, "averageConfidence", confidence)
             
-            # Increment daily analytics on Firestore
-            date_str = datetime.utcnow().strftime("%Y-%m-%d")
-            self.increment_analytics(date_str, "totalPredictions", 1)
-            # For average confidence, we could do compound updates or rely on client-side stats
-            return doc_ref.id
+            return pred_id
         except Exception as e:
-            logger.error(f"Firestore create_prediction error: {str(e)}")
-            return ""
+            logger.error(f"MongoDB create_prediction error: {str(e)}")
+            raise e
+
+    def save_speech_history(self, user_id: str, audio_file: str, text: str, language: str) -> str:
+        try:
+            doc = {
+                "user_id": user_id,
+                "audio_file": audio_file,
+                "text": text,
+                "language": language,
+                "created_at": datetime.utcnow()
+            }
+            res = self.db.speech_history.insert_one(doc)
+            return str(res.inserted_id)
+        except Exception as e:
+            logger.error(f"MongoDB save_speech_history error: {str(e)}")
+            raise e
+
+    def save_translation_history(self, user_id: str, source_language: str, target_language: str, input_text: str, translated_text: str) -> str:
+        try:
+            doc = {
+                "user_id": user_id,
+                "source_language": source_language,
+                "target_language": target_language,
+                "input_text": input_text,
+                "translated_text": translated_text,
+                "created_at": datetime.utcnow()
+            }
+            res = self.db.translation_history.insert_one(doc)
+            return str(res.inserted_id)
+        except Exception as e:
+            logger.error(f"MongoDB save_translation_history error: {str(e)}")
+            raise e
+
+    def save_uploaded_file(self, user_id: str, filename: str, file_type: str, storage_path: str) -> str:
+        try:
+            doc = {
+                "user_id": user_id,
+                "filename": filename,
+                "file_type": file_type,
+                "storage_path": storage_path,
+                "uploaded_at": datetime.utcnow()
+            }
+            res = self.db.uploaded_files.insert_one(doc)
+            return str(res.inserted_id)
+        except Exception as e:
+            logger.error(f"MongoDB save_uploaded_file error: {str(e)}")
+            raise e
 
     def get_model_versions(self) -> List[Dict[str, Any]]:
-        if self.is_mock:
-            return list(self._mock_store["model_versions"].values())
         try:
-            docs = self.db.collection("model_versions").get()
-            return [doc.to_dict() for doc in docs]
+            cursor = self.db.model_versions.find({}, {"_id": 0})
+            versions = list(cursor)
+            if not versions:
+                default_ver = {
+                    "version": "v1.0.0",
+                    "gcsPath": "models/sign_model_v1.0.0.h5",
+                    "accuracy": 0.942,
+                    "status": "active",
+                    "trainedAt": datetime.utcnow(),
+                    "description": "Initial sign language vocabulary model"
+                }
+                self.db.model_versions.insert_one(default_ver.copy())
+                default_ver.pop("_id", None)
+                versions = [default_ver]
+            return versions
         except Exception as e:
-            logger.error(f"Firestore get_model_versions error: {str(e)}")
-            return []
+            logger.error(f"MongoDB get_model_versions error: {str(e)}")
+            raise e
 
     def increment_analytics(self, date_str: str, field: str, value: int or float):
-        if self.is_mock:
-            if date_str not in self._mock_store["analytics"]:
-                self._mock_store["analytics"][date_str] = {
-                    "date": date_str,
-                    "dailyActiveUsers": 1,
-                    "totalPredictions": 0,
-                    "averageConfidence": 0.0,
-                    "apiCallsCount": 0,
-                    "storageUsedBytes": 104857600 # 100MB
-                }
-            doc = self._mock_store["analytics"][date_str]
-            if field == "averageConfidence":
-                # Running average approximation
-                total = doc["totalPredictions"]
-                current_avg = doc[field]
-                doc[field] = ((current_avg * (total - 1)) + value) / total if total > 0 else value
-            else:
-                doc[field] = doc.get(field, 0) + value
-            return
         try:
-            doc_ref = self.db.collection("analytics").document(date_str)
-            doc = doc_ref.get()
-            if not doc.exists:
-                doc_ref.set({
-                    "date": date_str,
-                    "dailyActiveUsers": 1,
-                    "totalPredictions": 0,
-                    "averageConfidence": 0.0,
-                    "apiCallsCount": 0,
-                    "storageUsedBytes": 104857600
-                })
-            
             if field == "averageConfidence":
-                # Firestore client transaction or let it aggregate asynchronously
-                pass
+                doc = self.db.analytics.find_one({"date": date_str})
+                total = doc.get("totalPredictions", 0) if doc else 0
+                current_avg = doc.get(field, 0.0) if doc else 0.0
+                new_avg = ((current_avg * (total - 1)) + value) / total if total > 0 else value
+                self.db.analytics.update_one(
+                    {"date": date_str},
+                    {"$set": {field: new_avg}},
+                    upsert=True
+                )
             else:
-                doc_ref.update({field: firestore.Increment(value)})
+                self.db.analytics.update_one(
+                    {"date": date_str},
+                    {"$inc": {field: value}},
+                    upsert=True
+                )
         except Exception as e:
-            logger.error(f"Firestore increment_analytics error: {str(e)}")
+            logger.error(f"MongoDB increment_analytics error: {str(e)}")
+            raise e
 
     def get_dashboard_stats(self, uid: str) -> Dict[str, Any]:
-        # 1. Total predictions for this user
-        if self.is_mock:
-            user_preds = [v for v in self._mock_store["predictions"].values() if v.get("userId") == uid]
-            predictions_count = len(user_preds)
+        try:
+            predictions_count = self.db.prediction_history.count_documents({"user_id": uid})
             
-            # Model Accuracy: average confidence of user's predictions, or baseline 98.2%
             if predictions_count > 0:
-                model_accuracy = sum(p.get("confidence", 0.0) for p in user_preds) / predictions_count
+                pipeline = [
+                    {"$match": {"user_id": uid}},
+                    {"$group": {"_id": None, "avg_conf": {"$avg": "$confidence"}}}
+                ]
+                res = list(self.db.prediction_history.aggregate(pipeline))
+                model_accuracy = (res[0]["avg_conf"] / 100.0) if res and "avg_conf" in res[0] else 0.982
             else:
                 model_accuracy = 0.982
+            
+            history_count = self.db.history.count_documents({"userId": uid})
+            
+            date_str = datetime.utcnow().strftime("%Y-%m-%d")
+            analytic_doc = self.db.analytics.find_one({"date": date_str})
+            if analytic_doc:
+                api_calls = analytic_doc.get("apiCallsCount", 12 + history_count + predictions_count)
+                daily_active = analytic_doc.get("dailyActiveUsers", 1)
+            else:
+                api_calls = 12 + history_count + predictions_count
+                daily_active = 1
                 
-            # History count
-            user_history = [v for v in self._mock_store["history"].values() if v.get("userId") == uid]
-            history_count = len(user_history)
-            
-            # API Calls: baseline queries + history + predictions
-            api_calls = 12 + history_count + predictions_count
-            
-            # Daily active users: number of unique active users in history/predictions today (or at least 1)
-            active_uids = set([v.get("userId") for v in self._mock_store["history"].values()])
-            daily_active = max(1, len(active_uids))
-            
-            # Storage used: baseline model size (2.8 MB) + 150 KB per history item
             storage_bytes = 2936012 + (history_count * 153600)
             
-        else:
-            try:
-                # Live mode: fetch stats dynamically from database collections
-                pred_docs = self.db.collection("predictions").where("userId", "==", uid).get()
-                predictions_count = len(pred_docs)
-                
-                if predictions_count > 0:
-                    model_accuracy = sum(doc.to_dict().get("confidence", 0.0) for doc in pred_docs) / predictions_count
-                else:
-                    model_accuracy = 0.982
-                
-                hist_docs = self.db.collection("history").where("userId", "==", uid).get()
-                history_count = len(hist_docs)
-                
-                date_str = datetime.utcnow().strftime("%Y-%m-%d")
-                analytic_doc = self.db.collection("analytics").document(date_str).get()
-                if analytic_doc.exists:
-                    ad = analytic_doc.to_dict()
-                    api_calls = ad.get("apiCallsCount", 12 + history_count + predictions_count)
-                    daily_active = ad.get("dailyActiveUsers", 1)
-                else:
-                    api_calls = 12 + history_count + predictions_count
-                    daily_active = 1
-                    
-                storage_bytes = 2936012 + (history_count * 153600)
-            except Exception as e:
-                logger.error(f"Error compiling live dashboard stats: {str(e)}")
-                daily_active = 1
-                predictions_count = 0
-                api_calls = 12
-                model_accuracy = 0.982
-                storage_bytes = 2936012
+            return {
+                "dailyActiveUsers": daily_active,
+                "totalPredictions": predictions_count,
+                "apiUsage": api_calls,
+                "modelAccuracy": model_accuracy,
+                "storageUsed": storage_bytes,
+                "recentHistoryCount": len(self.get_histories(uid, limit=5))
+            }
+        except Exception as e:
+            logger.error(f"Error compiling live dashboard stats: {str(e)}")
+            raise e
 
-        return {
-            "dailyActiveUsers": daily_active,
-            "totalPredictions": predictions_count,
-            "apiUsage": api_calls,
-            "modelAccuracy": model_accuracy,
-            "storageUsed": storage_bytes,
-            "recentHistoryCount": len(self.get_histories(uid, limit=5))
-        }
-
-# Global singleton
 db = FirestoreDB()

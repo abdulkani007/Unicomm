@@ -1,3 +1,17 @@
+import sys
+import types
+import numpy
+try:
+    import numpy.core.multiarray as _orig_multiarray
+    numpy_core = types.ModuleType("numpy._core")
+    numpy_core_multiarray = types.ModuleType("numpy._core.multiarray")
+    numpy_core_multiarray._reconstruct = _orig_multiarray._reconstruct
+    numpy_core_multiarray.scalar = _orig_multiarray.scalar
+    sys.modules["numpy._core"] = numpy_core
+    sys.modules["numpy._core.multiarray"] = numpy_core_multiarray
+except Exception:
+    pass
+
 from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
@@ -21,6 +35,11 @@ app = FastAPI(
     description="UniComm AI - Cloud-Based Multimodal Communication Platform for Deaf and Speech-Impaired Individuals Backend"
 )
 
+@app.on_event("startup")
+def startup_db_client():
+    from app.core.database import db
+
+
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
@@ -40,6 +59,8 @@ app.add_exception_handler(Exception, generic_exception_handler)
 
 # Include main router
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
+
 
 @app.get("/health", status_code=status.HTTP_200_OK, tags=["system"])
 async def health_check():

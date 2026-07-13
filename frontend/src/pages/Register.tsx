@@ -4,6 +4,9 @@ import { useAuth } from '../context/AuthContext';
 import { useAccessibility } from '../context/AccessibilityContext';
 import { motion } from 'framer-motion';
 import { Mail, Lock, User, Sparkles, Moon, Sun, ShieldAlert, Eye, EyeOff } from 'lucide-react';
+import LightRays from '../components/effects/LightRays';
+import DeafCommLogo from '../components/brand/DeafCommLogo';
+import RotatingText from '../components/effects/RotatingText';
 
 const Register: React.FC = () => {
   const { register } = useAuth();
@@ -20,23 +23,32 @@ const Register: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !email || !password || !confirmPassword) {
-      setError('Please fill in all fields');
+    if (!name.trim()) {
+      setError('Name is required');
+      return;
+    }
+    if (!email.trim()) {
+      setError('Email address is required');
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters long');
       return;
     }
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;
     }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters long');
-      return;
-    }
     setError('');
     setIsLoading(true);
     try {
       await register(email, password, name);
-      navigate('/');
+      navigate('/dashboard');
     } catch (err: any) {
       setError(err.message || 'Failed to create account.');
     } finally {
@@ -45,20 +57,45 @@ const Register: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col justify-between bg-gradient-to-br from-indigo-50 via-slate-50 to-purple-50 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950 relative overflow-hidden transition-colors duration-300">
+    <div className="min-h-screen flex flex-col justify-between bg-gradient-to-br from-indigo-50 via-slate-50 to-purple-50 dark:from-[#070709] dark:via-[#070709] dark:to-[#070709] relative overflow-hidden transition-colors duration-300">
       
-      {/* Decorative Blur Orbs */}
-      <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-primary/20 rounded-full blur-[100px] pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-purple-500/10 rounded-full blur-[100px] pointer-events-none" />
+      {/* SaaS WebGL Ambient Light Rays Backdrop */}
+      <LightRays
+        raysOrigin="top-center"
+        raysColor="#ffffff"
+        raysSpeed={0.6}
+        lightSpread={0.8}
+        rayLength={2.5}
+        followMouse={true}
+        mouseInfluence={0.15}
+        noiseAmount={0.015}
+        distortion={0.08}
+        pulsating={true}
+      />
 
       {/* Header controls */}
       <header className="p-6 flex justify-between items-center z-10">
         <div className="flex items-center gap-2">
-          <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/30">
-            <span className="text-white font-bold text-xl">U</span>
+          <div className="h-10 w-10 rounded-xl bg-zinc-950 border border-zinc-800/80 flex items-center justify-center shadow-lg shadow-black/40">
+            <DeafCommLogo size={20} />
           </div>
-          <span className="font-extrabold text-xl tracking-tight bg-gradient-to-r from-primary to-purple-600 dark:to-purple-400 bg-clip-text text-transparent">
-            UniComm AI
+          <span className="font-extrabold text-xl tracking-tight text-foreground flex items-center gap-1.5 shrink-0">
+            <span>UniComm</span>
+            <RotatingText
+              texts={['AI', 'Sign', 'Voice', 'Sync', 'Link']}
+              mainClassName="bg-primary text-primary-foreground px-2 py-0.5 rounded-lg text-xs font-black overflow-hidden"
+              staggerFrom="last"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "-120%" }}
+              staggerDuration={0.025}
+              splitLevelClassName="overflow-hidden pb-0.5"
+              transition={{ type: "spring", damping: 30, stiffness: 400 }}
+              rotationInterval={2200}
+              splitBy="characters"
+              auto
+              loop
+            />
           </span>
         </div>
 

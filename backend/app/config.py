@@ -27,6 +27,10 @@ class Settings(BaseModel):
     
     # Google Cloud credentials
     GOOGLE_APPLICATION_CREDENTIALS: str = Field(default="")
+    
+    # MongoDB Config
+    MONGODB_URI: str = Field(default="")
+    DATABASE_NAME: str = Field(default="unicomm_db")
 
 # Read environment variables
 settings = Settings(
@@ -35,5 +39,7 @@ settings = Settings(
     MODEL_PATH=os.getenv("MODEL_PATH", "assets/sign_model.h5"),
     ALLOWED_HOSTS=[x.strip() for x in os.getenv("ALLOWED_HOSTS", "*").split(",") if x.strip()],
     OPENAI_API_KEY=os.getenv("OPENAI_API_KEY", ""),
-    GOOGLE_APPLICATION_CREDENTIALS=os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
+    GOOGLE_APPLICATION_CREDENTIALS=os.getenv("GOOGLE_APPLICATION_CREDENTIALS", ""),
+    MONGODB_URI=os.getenv("MONGODB_URI", ""),
+    DATABASE_NAME=os.getenv("DATABASE_NAME", "unicomm_db")
 )

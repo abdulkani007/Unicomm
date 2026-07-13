@@ -2,106 +2,481 @@ import os
 import time
 import logging
 from typing import List, Tuple
+from collections import Counter, deque
+
+import cv2
+import mediapipe as mp
 import numpy as np
+import joblib
+
+import torch
+import torch.nn as nn
+
+import sys
+import types
+try:
+    import numpy.core.multiarray as _orig_multiarray
+    numpy_core = types.ModuleType("numpy._core")
+    numpy_core_multiarray = types.ModuleType("numpy._core.multiarray")
+    numpy_core_multiarray._reconstruct = _orig_multiarray._reconstruct
+    numpy_core_multiarray.scalar = _orig_multiarray.scalar
+    sys.modules["numpy._core"] = numpy_core
+    sys.modules["numpy._core.multiarray"] = numpy_core_multiarray
+except Exception:
+    pass
 
 logger = logging.getLogger("unicomm.ml")
 
-# We defer importing tensorflow to keep the app startup fast and avoid errors if TF is not fully installed.
+
+# =====================================================
+# RESIDUAL BLOCK
+# =====================================================
+
+class ResidualBlock(nn.Module):
+
+    def __init__(self, features):
+
+        super().__init__()
+
+        self.layers = nn.Sequential(
+
+            nn.Linear(features, features),
+            nn.BatchNorm1d(features),
+            nn.GELU(),
+            nn.Dropout(0.20),
+
+            nn.Linear(features, features),
+            nn.BatchNorm1d(features)
+
+        )
+
+        self.activation = nn.GELU()
+
+    def forward(self, x):
+
+        return self.activation(
+            x + self.layers(x)
+        )
+
+
+# =====================================================
+# SIGN LANGUAGE MODEL
+# =====================================================
+
+class SignLanguageModel(nn.Module):
+
+    def __init__(self, num_classes):
+
+        super().__init__()
+
+        self.input_layer = nn.Sequential(
+
+            nn.Linear(63, 256),
+            nn.BatchNorm1d(256),
+            nn.GELU(),
+            nn.Dropout(0.10)
+
+        )
+
+        self.block1 = ResidualBlock(256)
+
+        self.block2 = ResidualBlock(256)
+
+        self.block3 = ResidualBlock(256)
+
+        self.classifier = nn.Sequential(
+
+            nn.Linear(256, 128),
+            nn.GELU(),
+            nn.Dropout(0.15),
+
+            nn.Linear(128, 64),
+            nn.GELU(),
+
+            nn.Linear(64, num_classes)
+
+        )
+
+    def forward(self, x):
+
+        x = self.input_layer(x)
+
+        x = self.block1(x)
+
+        x = self.block2(x)
+
+        x = self.block3(x)
+
+        return self.classifier(x)
+
+
+# =====================================================
+# SERVICE
+# =====================================================
+
 class SignLanguageModelService:
+
     def __init__(self):
+
         self.model = None
-        self.model_version = "v1.0.0"
-        self.labels = ["HELLO", "THANK YOU", "YES", "NO", "PLEASE", "GOODBYE", "HELP", "I LOVE YOU", "SORRY", "WELCOME"]
-        self.is_mock = True
-        
-        # Try loading tensorflow model
+
+        self.device = torch.device(
+            "cuda" if torch.cuda.is_available() else "cpu"
+        )
+
+        self.model_version = "ResidualNet v2"
+
+        self.labels = []
+
+        self.encoder = None
+
+        self.is_mock = False
+
+        self.prediction_history = deque(maxlen=7)
+
+        # ------------------------------
+        # MediaPipe
+        # ------------------------------
+
+        self.mpHands = mp.solutions.hands
+
+        self.hands = self.mpHands.Hands(
+
+            static_image_mode=False,
+
+            max_num_hands=1,
+
+            model_complexity=1,
+
+            min_detection_confidence=0.7,
+
+            min_tracking_confidence=0.6
+
+        )
+
         self.load_model()
 
+
+    # =====================================================
+    # LOAD MODEL
+    # =====================================================
+
     def load_model(self):
+
         try:
-            # Check if model file exists
+
             from app.config import settings
-            model_path = settings.MODEL_PATH
-            
-            if not os.path.exists(model_path):
-                # Try to look for local assets path
-                os.makedirs(os.path.dirname(model_path) if os.path.dirname(model_path) else ".", exist_ok=True)
-                logger.warning(f"TensorFlow model not found at {model_path}. Running in MOCK ML INFERENCE MODE.")
-                self.is_mock = True
-                return
-            
-            import tensorflow as tf
-            logger.info("TensorFlow imported successfully. Loading model...")
-            self.model = tf.keras.models.load_model(model_path)
-            self.is_mock = False
-            logger.info(f"Loaded TensorFlow model from {model_path} successfully.")
-        except Exception as e:
-            logger.warning(f"Failed to load TensorFlow model: {str(e)}. Running in MOCK ML INFERENCE MODE.")
-            self.is_mock = True
 
-    def predict(self, sequence: List[List[float]]) -> Tuple[str, float, float]:
-        """
-        Receives a list of frames. Each frame is a list of 126 landmark coordinates.
-        Returns:
-            Tuple[prediction_label, confidence, latency_ms]
-        """
-        start_time = time.time()
-        
-        if self.is_mock:
-            # Simulate prediction
-            time.sleep(0.04) # Simulate 40ms model inference latency
-            latency = (time.time() - start_time) * 1000
-            
-            # Predict based on basic statistics of coordinates to make it semi-interactive
-            # Calculate sum of differences
-            flat_seq = np.array(sequence)
-            if flat_seq.size > 0:
-                mean_val = np.mean(flat_seq)
-                label_idx = int(abs(mean_val * 100)) % len(self.labels)
-                label = self.labels[label_idx]
-                confidence = float(0.85 + (mean_val % 0.14)) # realistic confidence 85%-99%
+            model_path = settings.MODEL_PATH
+
+            if model_path and not os.path.isabs(model_path):
+
+                import app
+
+                base_dir = os.path.dirname(
+                    os.path.dirname(
+                        os.path.abspath(app.__file__)
+                    )
+                )
+
+                model_path = os.path.abspath(
+                    os.path.join(base_dir, model_path)
+                )
+
+            encoder_path = os.path.join(
+                os.path.dirname(model_path),
+                "label_encoder.pkl"
+            )
+
+            logger.info(f"Loading Model : {model_path}")
+
+            self.encoder = joblib.load(
+                encoder_path
+            )
+
+            self.labels = list(
+                self.encoder.classes_
+            )
+
+            num_classes = len(self.labels)
+
+            self.model = SignLanguageModel(
+                num_classes
+            ).to(self.device)
+
+            checkpoint = torch.load(
+
+                model_path,
+
+                map_location=self.device,
+
+                weights_only=False
+
+            )
+
+            if (
+                isinstance(checkpoint, dict)
+                and
+                "model_state_dict" in checkpoint
+            ):
+
+                self.model.load_state_dict(
+                    checkpoint["model_state_dict"]
+                )
+
             else:
-                label = "HELLO"
-                confidence = 0.90
+
+                self.model.load_state_dict(
+                    checkpoint
+                )
+
+            self.model.eval()
+
+            logger.info(
+                "ResidualNet Loaded Successfully"
+            )
+
+        except Exception as e:
+
+            logger.exception(e)
+
+            self.is_mock = True
+    # =====================================================
+    # NORMALIZE LANDMARKS
+    # =====================================================
+
+    def normalize_landmarks(self, landmarks):
+        # Flatten and handle multi-frame sequences or dual-hand sequences
+        if isinstance(landmarks, (list, np.ndarray)):
+            # If 2D sequence, extract the last frame
+            if len(landmarks) > 0 and isinstance(landmarks[0], (list, np.ndarray)):
+                landmarks = landmarks[-1]
             
-            return label, confidence, latency
+            # Flatten to 1D
+            landmarks = np.array(landmarks).flatten()
+            
+            # Slice to exactly 63 coordinates (21 joints * 3 axes)
+            landmarks = landmarks[:63]
+            
+            # Pad with zeros if shorter than 63
+            if len(landmarks) < 63:
+                landmarks = np.pad(landmarks, (0, 63 - len(landmarks)))
+
+        landmarks = np.array(
+            landmarks,
+            dtype=np.float32
+        ).reshape(21, 3)
+
+        wrist = landmarks[0]
+
+        landmarks = landmarks - wrist
+
+        distances = np.linalg.norm(
+            landmarks,
+            axis=1
+        )
+
+        max_distance = np.max(distances)
+
+        if max_distance > 0:
+            landmarks = landmarks / max_distance
+
+        return landmarks.flatten()
+
+
+    # =====================================================
+    # LANDMARK PREDICTION
+    # =====================================================
+
+    def predict(self, landmarks):
+        if self.is_mock or self.model is None:
+            import random
+            word = random.choice(self.labels) if self.labels else "A"
+            self.prediction_history.append(word)
+            final_prediction = Counter(
+                self.prediction_history
+            ).most_common(1)[0][0]
+            return final_prediction, 0.95, 2.0
+
+        start_time = time.time()
+
+        features = self.normalize_landmarks(
+            landmarks
+        )
+
+        tensor = torch.tensor(
+            features,
+            dtype=torch.float32
+        ).unsqueeze(0).to(self.device)
+
+        with torch.no_grad():
+
+            outputs = self.model(tensor)
+
+            probabilities = torch.softmax(
+                outputs,
+                dim=1
+            )
+
+            confidence, predicted = torch.max(
+                probabilities,
+                dim=1
+            )
+
+        word = self.encoder.inverse_transform(
+            [predicted.item()]
+        )[0]
+
+        self.prediction_history.append(word)
+
+        final_prediction = Counter(
+            self.prediction_history
+        ).most_common(1)[0][0]
+
+        latency = (
+            time.time() - start_time
+        ) * 1000
+
+        return (
+            final_prediction,
+            float(confidence.item()),
+            latency
+        )
+
+
+    # =====================================================
+    # IMAGE PREDICTION
+    # =====================================================
+
+    def predict_image(self, image_bytes: bytes):
+        if self.is_mock or self.model is None:
+            import random
+            word = random.choice(self.labels) if self.labels else "A"
+            return word, 0.95, 5.0
+
+        start_time = time.time()
+
+        nparr = np.frombuffer(
+            image_bytes,
+            np.uint8
+        )
+
+        frame = cv2.imdecode(
+            nparr,
+            cv2.IMREAD_COLOR
+        )
+
+        if frame is None:
+
+            return (
+                "No Image",
+                0.0,
+                0.0
+            )
+
+        rgb = cv2.cvtColor(
+            frame,
+            cv2.COLOR_BGR2RGB
+        )
+
+        results = self.hands.process(rgb)
+
+        if not results.multi_hand_landmarks:
+
+            latency = (
+                time.time() - start_time
+            ) * 1000
+
+            return (
+                "No Hand",
+                0.0,
+                latency
+            )
+
+        hand = results.multi_hand_landmarks[0]
+
+        landmarks = []
+
+        for lm in hand.landmark:
+
+            landmarks.extend([
+
+                lm.x,
+
+                lm.y,
+
+                lm.z
+
+            ])
+
+        prediction, confidence, _ = self.predict(
+            landmarks
+        )
+
+        latency = (
+            time.time() - start_time
+        ) * 1000
+
+        return (
+            prediction,
+            confidence,
+            latency
+        )
+    # =====================================================
+    # COMPATIBILITY METHOD
+    # Existing API can still call predict(sequence)
+    # =====================================================
+
+    def predict_sequence(self, sequence: List[List[float]]):
+
+        """
+        Compatibility wrapper.
+
+        Accepts:
+            [
+                [x0,y0,z0],
+                ...
+                [x20,y20,z20]
+            ]
+
+        or
+
+            [x0,y0,z0,x1,y1,z1...]
+
+        """
+
+        if len(sequence) == 21:
+
+            landmarks = []
+
+            for point in sequence:
+
+                landmarks.extend(point)
+
+        else:
+
+            landmarks = sequence
+
+        return self.predict(landmarks)
+
+
+    # =====================================================
+    # RELEASE MEDIAPIPE
+    # =====================================================
+
+    def close(self):
 
         try:
-            # Preprocess sequence to match model input shape (1, sequence_length, features)
-            # Typically models expect a fixed sequence length, e.g., 30 frames.
-            # Pad or truncate sequence to 30 frames
-            target_length = 30
-            features_dim = 126
-            
-            input_data = np.zeros((target_length, features_dim))
-            seq_len = min(len(sequence), target_length)
-            
-            for i in range(seq_len):
-                frame_data = sequence[i]
-                # Ensure frame_data is exactly features_dim elements
-                if len(frame_data) < features_dim:
-                    frame_data = frame_data + [0.0] * (features_dim - len(frame_data))
-                elif len(frame_data) > features_dim:
-                    frame_data = frame_data[:features_dim]
-                input_data[i] = frame_data
-            
-            # Add batch dimension: shape (1, 30, 126)
-            input_batch = np.expand_dims(input_data, axis=0)
-            
-            # Run inference
-            predictions = self.model.predict(input_batch, verbose=0)
-            best_idx = np.argmax(predictions[0])
-            confidence = float(predictions[0][best_idx])
-            label = self.labels[best_idx] if best_idx < len(self.labels) else "UNKNOWN"
-            
-            latency = (time.time() - start_time) * 1000
-            return label, confidence, latency
-            
-        except Exception as e:
-            logger.error(f"Prediction model error: {str(e)}")
-            latency = (time.time() - start_time) * 1000
-            # Fallback to HELLO
-            return "HELLO", 0.50, latency
 
-# Global singleton
+            self.hands.close()
+
+        except Exception:
+
+            pass
+
+
+# =====================================================
+# GLOBAL SINGLETON
+# =====================================================
+
 ml_service = SignLanguageModelService()

@@ -4,6 +4,9 @@ import { useAuth } from '../context/AuthContext';
 import { useAccessibility } from '../context/AccessibilityContext';
 import { motion } from 'framer-motion';
 import { Mail, Lock, Sparkles, Moon, Sun, ShieldAlert, Eye, EyeOff } from 'lucide-react';
+import LightRays from '../components/effects/LightRays';
+import DeafCommLogo from '../components/brand/DeafCommLogo';
+import RotatingText from '../components/effects/RotatingText';
 
 const Login: React.FC = () => {
   const { login, loginWithGoogle } = useAuth();
@@ -13,20 +16,26 @@ const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
+    if (!email.trim() || !password) {
       setError('Please fill in all fields');
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError('Please enter a valid email address');
       return;
     }
     setError('');
     setIsLoading(true);
     try {
-      await login(email, password);
-      navigate('/');
+      await login(email, password, rememberMe);
+      navigate('/dashboard');
     } catch (err: any) {
       setError(err.message || 'Failed to sign in. Please check credentials.');
     } finally {
@@ -38,8 +47,8 @@ const Login: React.FC = () => {
     setError('');
     setIsLoading(true);
     try {
-      await loginWithGoogle();
-      navigate('/');
+      await loginWithGoogle(rememberMe);
+      navigate('/dashboard');
     } catch (err: any) {
       setError(err.message || 'Failed to sign in with Google');
     } finally {
@@ -48,20 +57,45 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col justify-between bg-gradient-to-br from-indigo-50 via-slate-50 to-purple-50 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950 relative overflow-hidden transition-colors duration-300">
+    <div className="min-h-screen flex flex-col justify-between bg-gradient-to-br from-indigo-50 via-slate-50 to-purple-50 dark:from-[#070709] dark:via-[#070709] dark:to-[#070709] relative overflow-hidden transition-colors duration-300">
       
-      {/* Decorative Blur Orbs */}
-      <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-primary/20 rounded-full blur-[100px] pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-purple-500/10 rounded-full blur-[100px] pointer-events-none" />
+      {/* SaaS WebGL Ambient Light Rays Backdrop */}
+      <LightRays
+        raysOrigin="top-center"
+        raysColor="#ffffff"
+        raysSpeed={0.6}
+        lightSpread={0.8}
+        rayLength={2.5}
+        followMouse={true}
+        mouseInfluence={0.15}
+        noiseAmount={0.015}
+        distortion={0.08}
+        pulsating={true}
+      />
 
       {/* Header controls */}
       <header className="p-6 flex justify-between items-center z-10">
         <div className="flex items-center gap-2">
-          <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/30">
-            <span className="text-white font-bold text-xl">U</span>
+          <div className="h-10 w-10 rounded-xl bg-zinc-950 border border-zinc-800/80 flex items-center justify-center shadow-lg shadow-black/40">
+            <DeafCommLogo size={20} />
           </div>
-          <span className="font-extrabold text-xl tracking-tight bg-gradient-to-r from-primary to-purple-600 dark:to-purple-400 bg-clip-text text-transparent">
-            UniComm AI
+          <span className="font-extrabold text-xl tracking-tight text-foreground flex items-center gap-1.5 shrink-0">
+            <span>UniComm</span>
+            <RotatingText
+              texts={['AI', 'Sign', 'Voice', 'Sync', 'Link']}
+              mainClassName="bg-primary text-primary-foreground px-2 py-0.5 rounded-lg text-xs font-black overflow-hidden"
+              staggerFrom="last"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "-120%" }}
+              staggerDuration={0.025}
+              splitLevelClassName="overflow-hidden pb-0.5"
+              transition={{ type: "spring", damping: 30, stiffness: 400 }}
+              rotationInterval={2200}
+              splitBy="characters"
+              auto
+              loop
+            />
           </span>
         </div>
 
@@ -164,6 +198,18 @@ const Login: React.FC = () => {
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
+            </div>
+
+            <div className="flex items-center justify-between pb-2">
+              <label className="flex items-center gap-2 cursor-pointer select-none cursor-target">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="rounded border-input text-primary focus:ring-primary/20 bg-background/50 cursor-pointer"
+                />
+                <span className="text-xs text-muted-foreground font-medium">Remember Me</span>
+              </label>
             </div>
 
             <button

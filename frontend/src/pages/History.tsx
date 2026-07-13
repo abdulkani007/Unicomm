@@ -66,7 +66,10 @@ const History: React.FC = () => {
 
   const handleExport = () => {
     // Open CSV download URL directly in standard browser tab
-    const token = localStorage.getItem('mock_token') || localStorage.getItem('fb_token');
+    const token = localStorage.getItem('mock_token') || 
+                  sessionStorage.getItem('mock_token') || 
+                  localStorage.getItem('fb_token') || 
+                  sessionStorage.getItem('fb_token');
     const exportUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'}/history/export?token=${token}`;
     
     // Create hidden anchor to force download
