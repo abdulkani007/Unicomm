@@ -289,11 +289,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               <X size={20} />
             </button>
 
-            <div className="flex items-center gap-2 mb-8 mt-2">
-              <div className="h-9 w-9 rounded-lg bg-primary flex items-center justify-center">
-                <span className="text-white font-bold">U</span>
+            <div className="flex items-center gap-3 mb-8 mt-2">
+              <div className="h-9 w-9 rounded-xl bg-zinc-950 border border-zinc-800/80 flex items-center justify-center shadow-lg shadow-black/40 shrink-0">
+                <DeafCommLogo size={18} />
               </div>
-              <span className="font-extrabold text-lg text-foreground">UniComm AI</span>
+              <span className="font-extrabold text-lg text-foreground flex items-center gap-1.5 shrink-0">
+                <span>UniComm</span>
+                <span className="bg-primary text-primary-foreground px-2 py-0.5 rounded-lg text-xs font-black">AI</span>
+              </span>
             </div>
 
             <nav className="flex-grow space-y-1.5">

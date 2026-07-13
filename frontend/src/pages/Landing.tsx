@@ -230,7 +230,7 @@ const Landing: React.FC = () => {
           transition={{ delay: 0.65, duration: 0.8 }}
           className="w-full max-w-2xl mt-12 mb-8 z-10 flex flex-col items-center"
         >
-          <div className="w-full flex justify-center" style={{ height: '520px', position: 'relative' }}>
+          <div className="w-full flex justify-center h-[380px] sm:h-[520px] relative">
             <Carousel
               baseWidth={420}
               autoplay={true}

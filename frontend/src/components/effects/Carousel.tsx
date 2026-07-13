@@ -41,7 +41,7 @@ function CarouselItem({ item, index, itemWidth, round, trackItemOffset, x, trans
       <div className={`carousel-item-header ${round ? 'round' : ''}`}>
         <span className="carousel-icon-container">{item.icon}</span>
       </div>
-      <div className="carousel-image-container w-full h-[260px] overflow-hidden px-5">
+      <div className="carousel-image-container w-full h-[180px] sm:h-[260px] overflow-hidden px-5">
         <img
           src={item.image}
           alt={item.title}
@@ -147,8 +147,17 @@ export default function Carousel({
   loop = true,
   round = false
 }: CarouselProps) {
+  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200);
+
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const containerPadding = 16;
-  const itemWidth = baseWidth - containerPadding * 2;
+  const dynamicBaseWidth = Math.min(baseWidth, windowWidth - 32);
+  const itemWidth = dynamicBaseWidth - containerPadding * 2;
   const trackItemOffset = itemWidth + GAP;
   
   const itemsForRender = useMemo(() => {
@@ -283,7 +292,8 @@ export default function Carousel({
       ref={containerRef}
       className={`carousel-container ${round ? 'round' : ''}`}
       style={{
-        width: `${baseWidth}px`,
+        width: '100%',
+        maxWidth: `${baseWidth}px`,
         ...(round && { height: `${baseWidth}px`, borderRadius: '50%' })
       }}
     >
