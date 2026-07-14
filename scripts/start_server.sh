@@ -2,7 +2,7 @@
 
 set -e
 
-cd /home/ubuntu/unicomm/backend
+cd /home/ec2-user/unicomm/backend
 
 source .venv/bin/activate
 
