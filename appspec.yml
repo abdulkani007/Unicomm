@@ -4,16 +4,16 @@ os: linux
 
 files:
   - source: /
-    destination: /home/ubuntu/unicomm
+    destination: /home/ec2-user/unicomm
 
 hooks:
 
   BeforeInstall:
     - location: scripts/install_dependencies.sh
       timeout: 900
-      runas: ubuntu
+      runas: ec2-user
 
   ApplicationStart:
     - location: scripts/start_server.sh
       timeout: 900
-      runas: ubuntu
+      runas: ec2-user
