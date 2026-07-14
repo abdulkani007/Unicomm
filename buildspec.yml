@@ -1,0 +1,30 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.11
+      nodejs: 20
+
+  pre_build:
+    commands:
+      - echo "Installing frontend dependencies..."
+      - cd frontend
+      - npm install
+
+      - echo "Installing backend dependencies..."
+      - cd ../backend
+      - python -m pip install --upgrade pip
+      - pip install -r requirements.txt
+
+  build:
+    commands:
+      - echo "Building frontend..."
+      - cd ../frontend
+      - npm run build
+
+      - echo "Backend verified successfully."
+
+artifacts:
+  files:
+    - '**/*'
