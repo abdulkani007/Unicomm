@@ -163,6 +163,7 @@ async def translate_text(
     """
     Translates text into a target language.
     """
+    uid = current_user.get("uid")
     translated = await audio_service.translate_text(payload.text, payload.target_language)
     
     # Store translation in translation_history
