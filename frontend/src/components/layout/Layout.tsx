@@ -280,7 +280,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         <div className="fixed inset-0 z-50 md:hidden flex">
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
           
-          <aside className="relative flex flex-col w-80 max-w-[80vw] bg-card h-full p-6 shadow-2xl border-r border-border/50">
+          <aside className="relative flex flex-col w-80 max-w-[80vw] bg-card h-full p-6 pb-16 shadow-2xl border-r border-border/50 overflow-y-auto">
             <button
               onClick={() => setMobileMenuOpen(false)}
               className="absolute top-4 right-4 p-2 rounded-lg border border-input text-foreground"

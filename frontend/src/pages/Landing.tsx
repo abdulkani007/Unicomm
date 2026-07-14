@@ -109,16 +109,16 @@ const Landing: React.FC = () => {
       />
 
       {/* Header bar */}
-      <header className="sticky top-0 z-40 bg-[#070709]/80 border-b border-zinc-900/60 backdrop-blur-md px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3 cursor-pointer cursor-target" onClick={() => navigate('/login')}>
-          <div className="h-9 w-9 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-center shadow-lg shadow-black/40">
-            <DeafCommLogo size={18} />
+      <header className="sticky top-0 z-40 bg-[#070709]/80 border-b border-zinc-900/60 backdrop-blur-md px-4 py-3 md:px-6 md:py-4 flex items-center justify-between">
+        <div className="flex items-center gap-2 md:gap-3 cursor-pointer cursor-target shrink-0" onClick={() => navigate('/login')}>
+          <div className="h-8 w-8 md:h-9 md:w-9 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-center shadow-lg shadow-black/40">
+            <DeafCommLogo size={16} />
           </div>
-          <span className="font-extrabold text-lg text-foreground flex items-center gap-1.5 shrink-0">
+          <span className="font-extrabold text-base md:text-lg text-foreground flex items-center gap-1.5 shrink-0">
             <span>UniComm</span>
             <RotatingText
               texts={['AI', 'Sign', 'Voice', 'Sync', 'Link']}
-              mainClassName="bg-zinc-100 text-zinc-950 px-2 py-0.5 rounded-lg text-xs font-black overflow-hidden"
+              mainClassName="bg-zinc-100 text-zinc-950 px-1.5 py-0.5 md:px-2 md:py-0.5 rounded-lg text-[10px] md:text-xs font-black overflow-hidden"
               staggerFrom="last"
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
@@ -140,16 +140,16 @@ const Landing: React.FC = () => {
           <a href="#about" className="hover:text-white transition-colors cursor-pointer cursor-target">About</a>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 md:gap-3 shrink-0">
           <Link 
             to="/login" 
-            className="px-4 py-2 text-sm font-semibold hover:text-white text-zinc-400 transition-all cursor-pointer cursor-target"
+            className="px-2.5 py-2 text-xs md:text-sm font-bold hover:text-white text-zinc-400 transition-all cursor-pointer cursor-target whitespace-nowrap"
           >
             Log In
           </Link>
           <Link 
             to="/register" 
-            className="px-4 py-2 text-sm font-semibold bg-zinc-100 text-zinc-950 rounded-xl hover:bg-zinc-200 transition-all shadow-md cursor-pointer cursor-target"
+            className="px-3.5 py-2 text-xs md:text-sm font-bold bg-zinc-100 text-zinc-950 rounded-xl hover:bg-zinc-200 transition-all shadow-md cursor-pointer cursor-target whitespace-nowrap"
           >
             Sign Up
           </Link>
