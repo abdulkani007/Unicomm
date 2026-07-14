@@ -14,6 +14,14 @@ echo "Changing to backend directory..."
 
 cd /home/ec2-user/unicomm/backend
 
+echo "Correcting permissions..."
+
+sudo chown -R ec2-user:ec2-user /home/ec2-user/unicomm
+
+echo "Removing old virtual environment..."
+
+rm -rf .venv
+
 echo "Creating virtual environment..."
 
 python3 -m venv .venv
