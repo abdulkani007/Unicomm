@@ -3,7 +3,7 @@ import { getAuth } from 'firebase/auth';
 
 // Configure Axios client
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'https://unicomm-a32z.onrender.com/api/v1',
+  baseURL: import.meta.env.VITE_API_URL || 'https://unicomm-1.onrender.com/api/v1',
   headers: {
     'Content-Type': 'application/json',
   },
