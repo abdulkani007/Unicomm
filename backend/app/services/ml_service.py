@@ -117,44 +117,47 @@ class SignLanguageModel(nn.Module):
 class SignLanguageModelService:
 
     def __init__(self):
-
         self.model = None
-
         self.device = torch.device(
             "cuda" if torch.cuda.is_available() else "cpu"
         )
-
         self.model_version = "ResidualNet v2"
-
         self.labels = []
-
         self.encoder = None
-
         self.is_mock = False
-
         self.prediction_history = deque(maxlen=7)
+        self.mpHands = None
+        self.hands = None
 
-        # ------------------------------
-        # MediaPipe
-        # ------------------------------
-
-        self.mpHands = mp.solutions.hands
-
-        self.hands = self.mpHands.Hands(
-
-            static_image_mode=False,
-
-            max_num_hands=1,
-
-            model_complexity=1,
-
-            min_detection_confidence=0.7,
-
-            min_tracking_confidence=0.6
-
-        )
-
-        self.load_model()
+    def load(self):
+        """
+        Lazily load MediaPipe and PyTorch models to prevent blocking import.
+        """
+        if self.model is not None and self.hands is not None:
+            return
+            
+        logger.info("Initializing lazy loading for ML Models...")
+        
+        # 1. Initialize MediaPipe Hands
+        if self.hands is None:
+            try:
+                logger.info("Initializing MediaPipe Hands model...")
+                self.mpHands = mp.solutions.hands
+                self.hands = self.mpHands.Hands(
+                    static_image_mode=False,
+                    max_num_hands=1,
+                    model_complexity=1,
+                    min_detection_confidence=0.7,
+                    min_tracking_confidence=0.6
+                )
+                logger.info("MediaPipe Hands initialized successfully.")
+            except Exception as mp_err:
+                logger.error(f"Failed to initialize MediaPipe Hands: {str(mp_err)}")
+                
+        # 2. Initialize PyTorch model
+        if self.model is None:
+            logger.info("Loading PyTorch residual sign language model...")
+            self.load_model()
 
 
     # =====================================================
@@ -288,6 +291,7 @@ class SignLanguageModelService:
     # =====================================================
 
     def predict(self, landmarks):
+        self.load()
         if self.is_mock or self.model is None:
             import random
             word = random.choice(self.labels) if self.labels else "A"
@@ -348,6 +352,7 @@ class SignLanguageModelService:
     # =====================================================
 
     def predict_image(self, image_bytes: bytes):
+        self.load()
         if self.is_mock or self.model is None:
             import random
             word = random.choice(self.labels) if self.labels else "A"

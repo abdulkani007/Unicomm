@@ -41,6 +41,18 @@ app = FastAPI(
 def startup_db_client():
     from app.core.database import initialize_db
     initialize_db()
+    
+    try:
+        import threading
+        import logging
+        logger = logging.getLogger("unicomm.main")
+        from app.services.ml_service import ml_service
+        logger.info("Spawning background thread to pre-load ML models...")
+        threading.Thread(target=ml_service.load, daemon=True).start()
+    except Exception as t_err:
+        import logging
+        logger = logging.getLogger("unicomm.main")
+        logger.warning(f"Could not spawn ML pre-load thread: {t_err}")
 
 
 # CORS configuration
