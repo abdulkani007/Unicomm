@@ -50,6 +50,10 @@ origins = [
     "http://localhost:3000",
     "http://127.0.0.1:5173",
     "http://127.0.0.1:3000",
+    "https://unicomm-8oxq.vercel.app",
+    "https://unicomm-edf5.vercel.app",
+    "https://unicomm-1.onrender.com",
+    "https://unicomm-a32z.onrender.com",
 ]
 
 # Pull any hosts from environment configuration

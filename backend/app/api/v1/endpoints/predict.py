@@ -101,39 +101,56 @@ async def predict_speech(
     Accepts spoken audio files and transcribes them using Whisper.
     """
     uid = current_user.get("uid")
-    audio_content = await file.read()
+    try:
+        audio_content = await file.read()
+        logger.info(f"Incoming speech-to-text request: filename={file.filename}, size={len(audio_content)} bytes")
+        
+        transcription, translation, confidence = await audio_service.transcribe_audio(
+            audio_content, 
+            file.filename or "audio.webm", 
+            target_language
+        )
+        
+        # Log speech conversion in speech_history (wrapped to prevent DB failure crash)
+        try:
+            db.save_speech_history(
+                user_id=uid,
+                audio_file=file.filename or "audio.webm",
+                text=transcription,
+                language=target_language
+            )
+        except Exception as db_err:
+            logger.error(f"Failed to save speech history to DB: {str(db_err)}")
+            
+        # Save upload record in DB
+        try:
+            db.save_uploaded_file(
+                user_id=uid,
+                filename=file.filename or "audio.webm",
+                file_type=file.content_type or "audio/webm",
+                storage_path=f"in-memory://{file.filename or 'audio.webm'}"
+            )
+        except Exception as db_err:
+            logger.error(f"Failed to save uploaded file log to DB: {str(db_err)}")
     
-    transcription, translation, confidence = await audio_service.transcribe_audio(
-        audio_content, 
-        file.filename or "audio.webm", 
-        target_language
-    )
-    
-    # Log speech conversion in speech_history
-    db.save_speech_history(
-        user_id=uid,
-        audio_file=file.filename or "audio.webm",
-        text=transcription,
-        language=target_language
-    )
-    
-    # Save upload record in DB
-    db.save_uploaded_file(
-        user_id=uid,
-        filename=file.filename or "audio.webm",
-        file_type=file.content_type or "audio/webm",
-        storage_path=f"in-memory://{file.filename or 'audio.webm'}"
-    )
-
-    # Log API call analytics
-    date_str = datetime.utcnow().strftime("%Y-%m-%d")
-    db.increment_analytics(date_str, "apiCallsCount", 1)
-    
-    return SpeechPredictionResponse(
-        transcription=transcription,
-        translation=translation,
-        confidence=confidence
-    )
+        # Log API call analytics
+        try:
+            date_str = datetime.utcnow().strftime("%Y-%m-%d")
+            db.increment_analytics(date_str, "apiCallsCount", 1)
+        except Exception as db_err:
+            logger.error(f"Failed to update analytics: {str(db_err)}")
+        
+        return SpeechPredictionResponse(
+            transcription=transcription,
+            translation=translation,
+            confidence=confidence
+        )
+    except Exception as exc:
+        logger.exception(f"Unhandled error in predict_speech endpoint: {str(exc)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Speech transcription failed: {str(exc)}"
+        )
 
 @router.post("/text-to-speech")
 @router.post("/tts")
@@ -147,13 +164,23 @@ async def text_to_speech_endpoint(
     Synthesizes speech from a text input.
     """
     uid = current_user.get("uid")
-    result = await tts_service.synthesize_speech(text, language_code, speaking_rate)
-    
-    # Log API call analytics
-    date_str = datetime.utcnow().strftime("%Y-%m-%d")
-    db.increment_analytics(date_str, "apiCallsCount", 1)
-    
-    return result
+    try:
+        result = await tts_service.synthesize_speech(text, language_code, speaking_rate)
+        
+        # Log API call analytics
+        try:
+            date_str = datetime.utcnow().strftime("%Y-%m-%d")
+            db.increment_analytics(date_str, "apiCallsCount", 1)
+        except Exception as db_err:
+            logger.error(f"Failed to update analytics: {str(db_err)}")
+        
+        return result
+    except Exception as exc:
+        logger.exception(f"Unhandled error in tts endpoint: {str(exc)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Text-to-speech synthesis failed: {str(exc)}"
+        )
 
 @router.post("/translate")
 async def translate_text(
@@ -164,23 +191,33 @@ async def translate_text(
     Translates text into a target language.
     """
     uid = current_user.get("uid")
-    translated = await audio_service.translate_text(payload.text, payload.target_language)
-    
-    # Store translation in translation_history
-    db.save_translation_history(
-        user_id=uid,
-        source_language="en",
-        target_language=payload.target_language,
-        input_text=payload.text,
-        translated_text=translated
-    )
-    
-    return {
-        "success": True,
-        "original_text": payload.text,
-        "translated_text": translated,
-        "target_language": payload.target_language
-    }
+    try:
+        translated = await audio_service.translate_text(payload.text, payload.target_language)
+        
+        # Store translation in translation_history
+        try:
+            db.save_translation_history(
+                user_id=uid,
+                source_language="en",
+                target_language=payload.target_language,
+                input_text=payload.text,
+                translated_text=translated
+            )
+        except Exception as db_err:
+            logger.error(f"Failed to save translation history to DB: {str(db_err)}")
+        
+        return {
+            "success": True,
+            "original_text": payload.text,
+            "translated_text": translated,
+            "target_language": payload.target_language
+        }
+    except Exception as exc:
+        logger.exception(f"Unhandled error in translate_text endpoint: {str(exc)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Translation failed: {str(exc)}"
+        )
 
 @router.post("/audio")
 async def predict_audio(
@@ -192,54 +229,77 @@ async def predict_audio(
     Accepts uploaded audio files (mp3, wav, m4a, flac, ogg) and transcribes them.
     """
     uid = current_user.get("uid")
-    audio_content = await file.read()
-    
-    # Check filename extension compatibility
-    filename = file.filename or "audio.wav"
-    ext = os.path.splitext(filename)[1].lower().replace(".", "")
-    if ext not in ["mp3", "wav", "m4a", "flac", "ogg", "webm"]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported audio format: {ext}. Please upload mp3, wav, m4a, flac, or ogg files."
+    try:
+        audio_content = await file.read()
+        
+        # Check filename extension compatibility
+        filename = file.filename or "audio.wav"
+        ext = os.path.splitext(filename)[1].lower().replace(".", "")
+        if ext not in ["mp3", "wav", "m4a", "flac", "ogg", "webm"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported audio format: {ext}. Please upload mp3, wav, m4a, flac, or ogg files."
+            )
+            
+        logger.info(f"Starting audio transcription for file: {filename}, size: {len(audio_content)} bytes")
+        
+        transcription, translation, confidence = await audio_service.transcribe_audio(
+            audio_content, 
+            filename, 
+            target_language
         )
         
-    transcription, translation, confidence = await audio_service.transcribe_audio(
-        audio_content, 
-        filename, 
-        target_language
-    )
-    
-    # Save search logs / history
-    db.create_prediction(uid, {
-        "modelName": "OpenAIWhisperSpeech",
-        "modelVersion": "whisper-1",
-        "featuresExtracted": len(audio_content),
-        "predictedClass": "AudioFileTranscription",
-        "confidence": confidence
-    })
-    
-    # Log speech conversion in speech_history
-    db.save_speech_history(
-        user_id=uid,
-        audio_file=filename,
-        text=transcription,
-        language=target_language
-    )
-    
-    # Save upload record in DB
-    db.save_uploaded_file(
-        user_id=uid,
-        filename=filename,
-        file_type=file.content_type or f"audio/{ext}",
-        storage_path=f"in-memory://{filename}"
-    )
-    
-    # Log API call analytics
-    date_str = datetime.utcnow().strftime("%Y-%m-%d")
-    db.increment_analytics(date_str, "apiCallsCount", 1)
-    
-    return {
-        "transcription": transcription,
-        "translation": translation,
-        "confidence": confidence
-    }
+        # Save search logs / history
+        try:
+            db.create_prediction(uid, {
+                "modelName": "OpenAIWhisperSpeech",
+                "modelVersion": "whisper-1",
+                "featuresExtracted": len(audio_content),
+                "predictedClass": "AudioFileTranscription",
+                "confidence": confidence
+            })
+        except Exception as db_err:
+            logger.error(f"Failed to save prediction history to DB: {str(db_err)}")
+        
+        # Log speech conversion in speech_history
+        try:
+            db.save_speech_history(
+                user_id=uid,
+                audio_file=filename,
+                text=transcription,
+                language=target_language
+            )
+        except Exception as db_err:
+            logger.error(f"Failed to save speech history to DB: {str(db_err)}")
+        
+        # Save upload record in DB
+        try:
+            db.save_uploaded_file(
+                user_id=uid,
+                filename=filename,
+                file_type=file.content_type or f"audio/{ext}",
+                storage_path=f"in-memory://{filename}"
+            )
+        except Exception as db_err:
+            logger.error(f"Failed to save uploaded file log to DB: {str(db_err)}")
+        
+        # Log API call analytics
+        try:
+            date_str = datetime.utcnow().strftime("%Y-%m-%d")
+            db.increment_analytics(date_str, "apiCallsCount", 1)
+        except Exception as db_err:
+            logger.error(f"Failed to update analytics: {str(db_err)}")
+        
+        return {
+            "transcription": transcription,
+            "translation": translation,
+            "confidence": confidence
+        }
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as exc:
+        logger.exception(f"Unhandled error in predict_audio endpoint: {str(exc)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Audio transcription service error: {str(exc)}"
+        )
