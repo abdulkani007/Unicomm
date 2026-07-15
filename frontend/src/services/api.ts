@@ -4,15 +4,20 @@ import { getAuth } from 'firebase/auth';
 // Configure Axios client
 const getBaseURL = (): string => {
   const envUrl = import.meta.env.VITE_API_URL;
-  // If explicitly configured in .env, use it
-  if (envUrl && envUrl.trim() !== "") {
-    return envUrl;
-  }
-  // Auto-detect local development vs hosted environment
-  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+  const isLocalhost = typeof window !== 'undefined' && 
+                      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  
+  if (isLocalhost) {
+    // If running on localhost, only use .env if it explicitly points to a local address.
+    // Otherwise, default to local backend to prevent connecting to production Render.
+    if (envUrl && (envUrl.includes('localhost') || envUrl.includes('127.0.0.1'))) {
+      return envUrl;
+    }
     return 'http://localhost:8000/api/v1';
   }
-  return 'https://unicomm-1.onrender.com/api/v1';
+  
+  // Production / Hosted environment
+  return envUrl || 'https://unicomm-1.onrender.com/api/v1';
 };
 
 const api = axios.create({
