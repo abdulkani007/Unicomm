@@ -16,6 +16,9 @@ mongodb_uri = os.getenv("MONGODB_URI")
 if not mongodb_uri:
     raise ValueError("MONGODB_URI environment variable is missing from .env configuration!")
 
+client = None
+db = None
+
 try:
     # Initialize PyMongo using required client block (securing connection with certifi CA bundle)
     client = MongoClient(
@@ -77,11 +80,23 @@ try:
     db.settings.create_index("userId")
 
 except Exception as e:
-    # Print the complete exception without falling back to any mock database
+    # Print the complete exception
     print("MongoDB Atlas connection failed with exception:")
     import traceback
     traceback.print_exc()
-    raise e
+    logger.warning(f"MongoDB connection failed at startup: {str(e)}. FastAPI will boot and attempt auto-reconnect on-demand.")
+    # Initialize client and db fallback so other modules don't crash on import
+    if client is None:
+        try:
+            client = MongoClient(
+                os.getenv("MONGODB_URI"),
+                serverSelectionTimeoutMS=5000,
+                tlsCAFile=certifi.where()
+            )
+        except Exception:
+            pass
+    if db is None and client is not None:
+        db = client[os.getenv("DATABASE_NAME", "unicomm_db")]
 
 def get_db():
     """
