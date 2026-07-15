@@ -39,7 +39,8 @@ app = FastAPI(
 
 @app.on_event("startup")
 def startup_db_client():
-    from app.core.database import db
+    from app.core.database import initialize_db
+    initialize_db()
 
 
 # CORS configuration

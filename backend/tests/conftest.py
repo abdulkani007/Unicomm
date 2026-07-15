@@ -96,6 +96,9 @@ class MockDatabaseModule:
     @staticmethod
     def get_db():
         return mock_database_instance
+    @staticmethod
+    def initialize_db():
+        pass
 
 sys.modules['app.core.database'] = MockDatabaseModule
 
