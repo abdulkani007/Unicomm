@@ -32,6 +32,8 @@ setup_logging()
 app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    docs_url=f"{settings.API_V1_STR}/docs",
+    redoc_url=f"{settings.API_V1_STR}/redoc",
     description="UniComm AI - Cloud-Based Multimodal Communication Platform for Deaf and Speech-Impaired Individuals Backend"
 )
 
