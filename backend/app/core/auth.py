@@ -16,36 +16,44 @@ import json
 firebase_initialized = False
 
 try:
-    json_str = os.getenv("FIREBASE_CREDENTIALS_JSON")
-    if json_str:
-        cred_info = json.loads(json_str)
-        cred = credentials.Certificate(cred_info)
-        firebase_admin.initialize_app(cred)
+    if firebase_admin._apps:
         firebase_initialized = True
-        logger.info("Firebase Admin SDK initialized successfully via FIREBASE_CREDENTIALS_JSON.")
+        logger.info("Firebase Admin SDK was already initialized.")
     else:
-        cred_path = settings.FIREBASE_CREDENTIALS_PATH
-        if cred_path and not os.path.isabs(cred_path):
-            import app
-            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(app.__file__)))
-            cred_path = os.path.join(base_dir, cred_path)
-
-        if cred_path and os.path.exists(cred_path):
-            cred = credentials.Certificate(cred_path)
+        json_str = os.getenv("FIREBASE_CREDENTIALS_JSON")
+        if json_str:
+            cred_info = json.loads(json_str)
+            cred = credentials.Certificate(cred_info)
             firebase_admin.initialize_app(cred)
             firebase_initialized = True
-            logger.info(f"Firebase Admin SDK initialized with service account certificate: {cred_path}")
+            logger.info("Firebase Admin SDK initialized successfully via FIREBASE_CREDENTIALS_JSON.")
         else:
-            # Initialize with project ID from settings options
-            options = {}
-            if settings.FIREBASE_PROJECT_ID:
-                options['projectId'] = settings.FIREBASE_PROJECT_ID
-            firebase_admin.initialize_app(options=options)
-            firebase_initialized = True
-            logger.info(f"Firebase Admin SDK initialized with options (Project ID: {settings.FIREBASE_PROJECT_ID}).")
+            cred_path = settings.FIREBASE_CREDENTIALS_PATH
+            if cred_path and not os.path.isabs(cred_path):
+                import app
+                base_dir = os.path.dirname(os.path.dirname(os.path.abspath(app.__file__)))
+                cred_path = os.path.join(base_dir, cred_path)
+
+            if cred_path and os.path.exists(cred_path):
+                cred = credentials.Certificate(cred_path)
+                firebase_admin.initialize_app(cred)
+                firebase_initialized = True
+                logger.info(f"Firebase Admin SDK initialized with service account certificate: {cred_path}")
+            else:
+                # Initialize with project ID from settings options
+                options = {}
+                if settings.FIREBASE_PROJECT_ID:
+                    options['projectId'] = settings.FIREBASE_PROJECT_ID
+                firebase_admin.initialize_app(options=options)
+                firebase_initialized = True
+                logger.info(f"Firebase Admin SDK initialized with options (Project ID: {settings.FIREBASE_PROJECT_ID}).")
 except Exception as e:
-    logger.warning(f"Firebase Admin SDK not initialized: {str(e)}. Running in MOCK AUTH MODE.")
-    firebase_initialized = False
+    if "The default Firebase app already exists" in str(e):
+        firebase_initialized = True
+        logger.info("Firebase Admin SDK was already initialized in another thread.")
+    else:
+        logger.warning(f"Firebase Admin SDK not initialized: {str(e)}. Running in MOCK AUTH MODE.")
+        firebase_initialized = False
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security_bearer)) -> dict:
     if not credentials:
