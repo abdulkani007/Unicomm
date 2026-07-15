@@ -20,8 +20,8 @@ datasets/
 archive/
 
 # AI Models
-models/
-*.pth
+# models/
+# *.pth
 *.pt
 *.h5
 
