@@ -66,14 +66,14 @@ const createGesturePositions = (): LandmarkPositions => {
       knuckles[3], new THREE.Vector3(0.1, -0.1, 0.2), new THREE.Vector3(0.05, -0.15, 0.3), new THREE.Vector3(0, -0.1, 0.2), // Ring curled
       knuckles[4], new THREE.Vector3(0.3, -0.2, 0.2), new THREE.Vector3(0.2, -0.25, 0.3), new THREE.Vector3(0.15, -0.2, 0.2) // Pinky curled
     ],
-    LOVE: [
+    COME: [
       wrist, // 0
-      // Thumb, Index, Pinky extended; Middle and Ring curled
-      knuckles[0], new THREE.Vector3(-0.9, -0.1, 0.3), new THREE.Vector3(-1.1, 0.1, 0.4), new THREE.Vector3(-1.3, 0.2, 0.5), // Thumb open
-      knuckles[1], new THREE.Vector3(-0.5, 0.5, 0), new THREE.Vector3(-0.5, 0.9, 0), new THREE.Vector3(-0.5, 1.2, 0), // Index open
-      knuckles[2], new THREE.Vector3(-0.15, 0, 0.2), new THREE.Vector3(-0.1, -0.1, 0.3), new THREE.Vector3(-0.05, -0.05, 0.2), // Middle curled
-      knuckles[3], new THREE.Vector3(0.15, -0.05, 0.2), new THREE.Vector3(0.1, -0.1, 0.3), new THREE.Vector3(0.05, -0.05, 0.2), // Ring curled
-      knuckles[4], new THREE.Vector3(0.5, 0.4, -0.1), new THREE.Vector3(0.5, 0.7, -0.1), new THREE.Vector3(0.5, 1.0, -0.1) // Pinky open
+      // Index finger pointing out and curving forward, other fingers curled
+      knuckles[0], new THREE.Vector3(-0.3, -0.2, 0.2), new THREE.Vector3(-0.1, -0.15, 0.3), new THREE.Vector3(0, -0.1, 0.2), // Thumb folded
+      knuckles[1], new THREE.Vector3(-0.4, 0.3, 0.3), new THREE.Vector3(-0.45, 0.45, 0.5), new THREE.Vector3(-0.5, 0.5, 0.65), // Index pointing and beckoning
+      knuckles[2], new THREE.Vector3(-0.1, -0.05, 0.2), new THREE.Vector3(-0.05, -0.1, 0.3), new THREE.Vector3(0, -0.05, 0.2), // Middle curled
+      knuckles[3], new THREE.Vector3(0.1, -0.1, 0.2), new THREE.Vector3(0.05, -0.15, 0.3), new THREE.Vector3(0, -0.1, 0.2), // Ring curled
+      knuckles[4], new THREE.Vector3(0.3, -0.2, 0.2), new THREE.Vector3(0.2, -0.25, 0.3), new THREE.Vector3(0.15, -0.2, 0.2) // Pinky curled
     ],
     YES: [
       wrist, // 0
@@ -87,8 +87,8 @@ const createGesturePositions = (): LandmarkPositions => {
   };
 };
 
-const GESTURE_SEQUENCE = ['HELLO', 'THANK_YOU', 'EAT', 'HELP', 'LOVE', 'YES'];
-const CONFIDENCES = [99.4, 97.8, 98.6, 99.1, 98.3, 99.2];
+const GESTURE_SEQUENCE = ['HELLO', 'THANK_YOU', 'EAT', 'HELP', 'COME', 'YES'];
+const CONFIDENCES = [99.4, 97.8, 98.6, 99.1, 98.5, 99.2];
 
 export default function Hand3DShowcase() {
   const mountRef = useRef<HTMLDivElement>(null);
