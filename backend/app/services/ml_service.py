@@ -172,7 +172,9 @@ class SignLanguageModelService:
             if model_path and not os.path.isabs(model_path):
                 candidate_paths = [
                     os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), model_path)), # backend/app/services/ml_service.py -> backend/
+                    os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "..", model_path)), # backend/app/services/ml_service.py -> backend/ -> repo root
                     os.path.abspath(os.path.join(os.getcwd(), model_path)),
+                    os.path.abspath(os.path.join(os.getcwd(), "..", model_path)),
                     os.path.abspath(os.path.join(os.getcwd(), "backend", model_path)),
                 ]
                 for p in candidate_paths:
