@@ -16,5 +16,5 @@ dnspython>=2.0.0
 scikit-learn>=1.0.0
 joblib>=1.0.0
 torch>=2.0.0
-
-
+openai-whisper
+soundfile

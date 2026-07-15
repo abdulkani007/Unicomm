@@ -15,6 +15,14 @@ class AudioService:
         
         if self.is_mock:
             logger.warning("No OpenAI API Key configured. Online transcription is disabled, local Whisper or mock translation will be used.")
+            try:
+                import whisper
+                logger.info("Pre-loading offline/local OpenAI Whisper model ('tiny') at startup...")
+                self.local_model = whisper.load_model("tiny")
+                logger.info("Local Whisper model loaded successfully at startup.")
+                self.local_model_loaded = True
+            except Exception as e:
+                logger.warning(f"Could not pre-load local Whisper model at startup (will retry on-demand): {str(e)}")
         else:
             logger.info("OpenAI Whisper service configured successfully.")
 
