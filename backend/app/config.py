@@ -17,7 +17,7 @@ class Settings(BaseModel):
     FIREBASE_PROJECT_ID: str = Field(default="")
     
     # ML Model Config
-    MODEL_PATH: str = Field(default="assets/sign_model.h5")
+    MODEL_PATH: str = Field(default="models/SignLanguage_v2_ResidualNet.pth")
     
     # Security
     ALLOWED_HOSTS: List[str] = ["*"]
@@ -35,8 +35,8 @@ class Settings(BaseModel):
 # Read environment variables
 settings = Settings(
     FIREBASE_CREDENTIALS_PATH=os.getenv("FIREBASE_CREDENTIALS_PATH", ""),
-    FIREBASE_PROJECT_ID=os.getenv("FIREBASE_PROJECT_ID", "unicomm-ai-demo"),
-    MODEL_PATH=os.getenv("MODEL_PATH", "assets/sign_model.h5"),
+    FIREBASE_PROJECT_ID=os.getenv("FIREBASE_PROJECT_ID", "unicomm-57bc0"),
+    MODEL_PATH=os.getenv("MODEL_PATH", "models/SignLanguage_v2_ResidualNet.pth"),
     ALLOWED_HOSTS=[x.strip() for x in os.getenv("ALLOWED_HOSTS", "*").split(",") if x.strip()],
     OPENAI_API_KEY=os.getenv("OPENAI_API_KEY", ""),
     GOOGLE_APPLICATION_CREDENTIALS=os.getenv("GOOGLE_APPLICATION_CREDENTIALS", ""),
