@@ -41,9 +41,24 @@ def startup_db_client():
 
 
 # CORS configuration
+import os
+
+origins = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
+]
+
+# Pull any hosts from environment configuration
+allowed_hosts_raw = os.getenv("ALLOWED_HOSTS", "*")
+if allowed_hosts_raw != "*":
+    origins.extend([x.strip() for x in allowed_hosts_raw.split(",") if x.strip()])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_HOSTS,
+    allow_origins=origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

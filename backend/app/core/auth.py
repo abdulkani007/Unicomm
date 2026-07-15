@@ -55,15 +55,26 @@ except Exception as e:
         logger.warning(f"Firebase Admin SDK not initialized: {str(e)}. Running in MOCK AUTH MODE.")
         firebase_initialized = False
 
-def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security_bearer)) -> dict:
+from fastapi import Request
+
+def get_current_user(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(security_bearer)
+) -> dict:
+    raw_auth = request.headers.get("Authorization")
+    print(f"Authorization header received: {raw_auth}")
+    
     if not credentials:
+        print("Firebase verification failure reason: Authorization credentials missing")
         raise AuthenticationError("Authorization credentials missing")
     
     token = credentials.credentials
+    print(f"Token length: {len(token)}")
     
     # Check if the token is a mock token
     if token.startswith("mock-token-"):
         logger.debug("Using mock auth validation for mock token")
+        print("Firebase verification success")
         if token == "mock-token-admin":
             return {"uid": "mock-admin-uid", "email": "admin@unicomm.ai", "name": "Mock Admin", "role": "admin"}
         else:
@@ -72,6 +83,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
 
     # If not a mock token, require Firebase initialized and verify
     if not firebase_initialized:
+        print("Firebase verification failure reason: Firebase auth is not initialized, and this is not a mock token")
         raise AuthenticationError("Firebase auth is not initialized, and this is not a mock token. Use 'mock-token-<uid>'.")
 
     try:
@@ -79,10 +91,13 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
         # Add basic custom claims role evaluation
         role = decoded_token.get("role", "user")
         decoded_token["role"] = role
+        print("Firebase verification success")
         return decoded_token
     except Exception as e:
-        logger.error(f"Token verification failed: {str(e)}")
-        raise AuthenticationError(f"Token verification failed: {str(e)}")
+        error_msg = str(e)
+        print(f"Firebase verification failure reason: {error_msg}")
+        logger.error(f"Token verification failed: {error_msg}")
+        raise AuthenticationError(f"Token verification failed: {error_msg}")
 
 def require_admin(user: dict = Depends(get_current_user)) -> dict:
     if user.get("role") != "admin":
