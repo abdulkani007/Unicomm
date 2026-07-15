@@ -12,7 +12,7 @@ class AudioService:
         self.is_mock = not bool(self.api_key)
         
         if self.is_mock:
-            logger.warning("No OpenAI API Key configured. Online transcription is disabled, local SpeechRecognition will be used.")
+            logger.warning("No OpenAI API Key configured. Online transcription is disabled, local Whisper or SpeechRecognition will be used.")
         else:
             logger.info("OpenAI Whisper service configured successfully.")
 
@@ -22,7 +22,7 @@ class AudioService:
         Returns:
             Tuple[transcription, translation, confidence]
         """
-        # If API key is set, use OpenAI API (which is very fast and takes no memory)
+        # 1. Try OpenAI API first if key is configured
         if not self.is_mock:
             try:
                 # Prepare files payload for OpenAI Whisper API
@@ -58,17 +58,61 @@ class AudioService:
                 logger.error(f"Failed to transcribe audio via OpenAI API: {str(e)}")
                 logger.info("Falling back to local speech recognition...")
 
-        # Local Speech Recognition using SpeechRecognition package (Google free Web API fallback)
+        # 2. Try local offline Whisper model if available (great for developer localhost with torch/whisper installed)
+        try:
+            import whisper
+            import tempfile
+            import os
+            import anyio
+            
+            logger.info("Attempting offline transcription using local Whisper model...")
+            local_model = whisper.load_model("tiny")
+            
+            ext = os.path.splitext(filename)[1] or ".wav"
+            with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as temp_file:
+                temp_file.write(audio_bytes)
+                temp_path = temp_file.name
+                
+            try:
+                # Attempt manual decoding using soundfile
+                try:
+                    import soundfile as sf
+                    import numpy as np
+                    audio_input, samplerate = sf.read(temp_path, dtype='float32')
+                    if len(audio_input.shape) > 1:
+                        audio_input = audio_input.mean(axis=1)
+                    if samplerate != 16000:
+                        num_samples = int(len(audio_input) * 16000 / samplerate)
+                        audio_input = np.interp(
+                            np.linspace(0, len(audio_input), num_samples, endpoint=False),
+                            np.arange(len(audio_input)),
+                            audio_input
+                        ).astype(np.float32)
+                except Exception:
+                    audio_input = temp_path
+                
+                def run_local_whisper():
+                    return local_model.transcribe(audio_input)
+                    
+                result = await anyio.to_thread.run_sync(run_local_whisper)
+                transcription = result.get("text", "").strip()
+                logger.info(f"Local Whisper transcription complete: {transcription[:40]}...")
+                translation = await self.translate_text(transcription, target_language)
+                return transcription, translation, 0.99
+            finally:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+        except Exception as whisper_err:
+            logger.info(f"Local offline Whisper not available or failed: {str(whisper_err)}")
+
+        # 3. Try local SpeechRecognition package (Google free Web API fallback)
         try:
             import speech_recognition as sr
-            import io
             import tempfile
             import os
             
             logger.info("Attempting local speech recognition using SpeechRecognition...")
             r = sr.Recognizer()
-            
-            # Since SpeechRecognition needs a WAV/AIFF file path, let's write it to a temp WAV file
             ext = os.path.splitext(filename)[1].lower() or ".wav"
             
             with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as temp_file:
@@ -89,8 +133,6 @@ class AudioService:
                 with sr.AudioFile(temp_path_for_sr) as source:
                     audio_data = r.record(source)
                 
-                # Use Google Speech Recognition API (which is FREE and does NOT require API key!)
-                # Match target language code
                 lang_code = "en-US"
                 if target_language == "hi":
                     lang_code = "hi-IN"
@@ -107,7 +149,6 @@ class AudioService:
                 
                 logger.info(f"Sending audio to Google Speech API with lang: {lang_code}...")
                 
-                # Perform speech recognition in a thread pool to avoid blocking the event loop
                 import anyio
                 def recognize():
                     return r.recognize_google(audio_data, language=lang_code)
@@ -129,13 +170,13 @@ class AudioService:
         except Exception as local_err:
             logger.error(f"Local SpeechRecognition transcription failed: {str(local_err)}")
 
-        # Ultimate fallback to mock mode
+        # 4. Ultimate fallback to mock mode
         logger.warning("All transcription methods failed. Falling back to mock response.")
         transcription = "Hello, how are you today?"
         translations = {
             "en": "Hello, how are you today?",
             "hi": "नमस्ते, आप आज कैसे हैं?",
-            "ta": "வணக்கம், இன்று நீங்கள் எப்படி இருக்கيرீர்கள்?",
+            "ta": "வணக்கம், இன்று நீங்கள் எப்படி இருக்கிறீர்கள்?",
             "ml": "ഹലോ, ഇന്ന് നിങ്ങൾക്ക് സുഖമാണോ?",
             "te": "హలో, ఈరోజు మీరు ఎలా ఉన్నారు?",
             "kn": "ಹಲೋ, ಇಂದು ನೀವು ಹೇಗಿದ್ದೀರಿ?",
