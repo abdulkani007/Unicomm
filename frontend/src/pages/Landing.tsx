@@ -14,7 +14,7 @@ import MagicBento from '../components/effects/MagicBento';
 import TargetCursor from '../components/effects/TargetCursor';
 import TextPressure from '../components/effects/TextPressure';
 import TextType from '../components/effects/TextType';
-import Carousel from '../components/effects/Carousel';
+import Hand3DShowcase from '../components/effects/Hand3DShowcase';
 
 const Landing: React.FC = () => {
   const navigate = useNavigate();
@@ -223,23 +223,14 @@ const Landing: React.FC = () => {
           </button>
         </motion.div>
 
-        {/* 9 Images Carousel Slider */}
+        {/* 3D Hand Landmark Animation Showcase centerpiece */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.65, duration: 0.8 }}
-          className="w-full max-w-2xl mt-12 mb-8 z-10 flex flex-col items-center"
+          className="w-full max-w-4xl mt-12 mb-8 z-10"
         >
-          <div className="w-full flex justify-center h-[380px] sm:h-[520px] relative">
-            <Carousel
-              baseWidth={420}
-              autoplay={true}
-              autoplayDelay={3000}
-              pauseOnHover={true}
-              loop={true}
-              round={false}
-            />
-          </div>
+          <Hand3DShowcase />
         </motion.div>
       </section>
 
