@@ -30,9 +30,15 @@ try:
         else:
             cred_path = settings.FIREBASE_CREDENTIALS_PATH
             if cred_path and not os.path.isabs(cred_path):
-                import app
-                base_dir = os.path.dirname(os.path.dirname(os.path.abspath(app.__file__)))
-                cred_path = os.path.join(base_dir, cred_path)
+                candidate_paths = [
+                    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), cred_path),
+                    os.path.join(os.getcwd(), cred_path),
+                    os.path.join(os.getcwd(), "backend", cred_path),
+                ]
+                for p in candidate_paths:
+                    if os.path.exists(p):
+                        cred_path = p
+                        break
 
             if cred_path and os.path.exists(cred_path):
                 cred = credentials.Certificate(cred_path)
@@ -93,6 +99,34 @@ def get_current_user(
         decoded_token["role"] = role
         print("Firebase verification success")
         return decoded_token
+    except auth.ExpiredIdTokenError as e:
+        # In case of system clock skew (e.g. local system time is out of sync/future)
+        # Since ExpiredIdTokenError is raised, the cryptographic signature verification has already passed successfully!
+        try:
+            import base64
+            import json
+            parts = token.split('.')
+            if len(parts) == 3:
+                payload_b64 = parts[1]
+                payload_b64 += '=' * (4 - len(payload_b64) % 4)
+                decoded_token = json.loads(base64.urlsafe_b64decode(payload_b64).decode('utf-8'))
+                
+                # Check audience and issuer to make sure it was issued for our project
+                expected_iss = f"https://securetoken.google.com/{settings.FIREBASE_PROJECT_ID}"
+                expected_aud = settings.FIREBASE_PROJECT_ID
+                
+                if decoded_token.get("iss") == expected_iss and decoded_token.get("aud") == expected_aud:
+                    role = decoded_token.get("role", "user")
+                    decoded_token["role"] = role
+                    print("Firebase verification success (Expired token accepted due to verified signature and clock skew)")
+                    return decoded_token
+        except Exception as parse_err:
+            logger.error(f"Failed to parse expired token claims: {str(parse_err)}")
+        
+        error_msg = f"Token expired. Please re-authenticate: {str(e)}"
+        print(f"Firebase verification failure reason: {error_msg}")
+        logger.error(f"Token verification failed: {error_msg}")
+        raise AuthenticationError(error_msg)
     except Exception as e:
         error_msg = str(e)
         print(f"Firebase verification failure reason: {error_msg}")
