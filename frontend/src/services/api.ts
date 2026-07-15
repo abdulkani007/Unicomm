@@ -2,8 +2,21 @@ import axios from 'axios';
 import { getAuth } from 'firebase/auth';
 
 // Configure Axios client
+const getBaseURL = (): string => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  // If explicitly configured in .env, use it
+  if (envUrl && envUrl.trim() !== "") {
+    return envUrl;
+  }
+  // Auto-detect local development vs hosted environment
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    return 'http://localhost:8000/api/v1';
+  }
+  return 'https://unicomm-1.onrender.com/api/v1';
+};
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'https://unicomm-1.onrender.com/api/v1',
+  baseURL: getBaseURL(),
   headers: {
     'Content-Type': 'application/json',
   },
