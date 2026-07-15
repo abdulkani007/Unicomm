@@ -100,9 +100,11 @@ UniComm_AI/
    ```
 5. Configure environment variables (create a `.env` file in the `backend/` directory):
    ```env
-   FIREBASE_PROJECT_ID=unicomm-ai-demo
-   MODEL_PATH=assets/sign_model.h5
+   FIREBASE_PROJECT_ID=unicomm-57bc0
+   MODEL_PATH=../models/SignLanguage_v2_ResidualNet.pth
    ALLOWED_HOSTS=*
+   MONGODB_URI=mongodb+srv://abbu007jd_db_user:abbu007@unicommcluster.ym5hpml.mongodb.net/unicomm_db?retryWrites=true&w=majority&appName=UniCommCluster
+   DATABASE_NAME=unicomm_db
    OPENAI_API_KEY=your_openai_whisper_api_key  # Optional: runs in mock if empty
    GOOGLE_APPLICATION_CREDENTIALS=path_to_gcp_creds.json  # Optional: falls back to native TTS if empty
    ```
@@ -122,13 +124,44 @@ UniComm_AI/
    ```
 3. Configure environment variables (create a `.env` file in the `frontend/` directory):
    ```env
-   VITE_API_URL=http://localhost:8000/api/v1
-   VITE_FIREBASE_API_KEY=your_firebase_key  # Optional: triggers mock auth if empty
+   VITE_API_URL=https://unicomm-1.onrender.com/api/v1
+   VITE_FIREBASE_API_KEY=AIzaSyBxkkSijwMkoPt7Bnm7lTUS_UKDK9a49gs
+   VITE_FIREBASE_AUTH_DOMAIN=unicomm-57bc0.firebaseapp.com
+   VITE_FIREBASE_PROJECT_ID=unicomm-57bc0
+   VITE_FIREBASE_STORAGE_BUCKET=unicomm-57bc0.firebasestorage.app
+   VITE_FIREBASE_MESSAGING_SENDER_ID=68139890767
+   VITE_FIREBASE_APP_ID=1:68139890767:web:514c0dcf89a11ced04d23a
    ```
 4. Start the Vite React development server:
    ```bash
    npm run dev
    ```
+
+---
+
+## Production Cloud Hosting Configuration
+
+### 🚀 Frontend (Vercel)
+When deploying your React frontend to Vercel, ensure you configure the following settings:
+1. **Root Directory**: Change this in your Vercel Project settings from `.` (root) to **`frontend`**.
+2. **Environment Variables**: Add the following keys under Vercel Settings ➔ Environment Variables:
+   * `VITE_API_URL` = `https://unicomm-1.onrender.com/api/v1`
+   * `VITE_FIREBASE_API_KEY` = `AIzaSyBxkkSijwMkoPt7Bnm7lTUS_UKDK9a49gs`
+   * `VITE_FIREBASE_AUTH_DOMAIN` = `unicomm-57bc0.firebaseapp.com`
+   * `VITE_FIREBASE_PROJECT_ID` = `unicomm-57bc0`
+   * `VITE_FIREBASE_STORAGE_BUCKET` = `unicomm-57bc0.firebasestorage.app`
+   * `VITE_FIREBASE_MESSAGING_SENDER_ID` = `68139890767`
+   * `VITE_FIREBASE_APP_ID` = `1:68139890767:web:514c0dcf89a11ced04d23a`
+
+### ⚙️ Backend (Render)
+When deploying your FastAPI backend to Render, configure the following settings:
+1. **Start Command**: Set this to `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+2. **Environment Variables**: Add the following keys in your Render Web Service settings:
+   * `FIREBASE_PROJECT_ID` = `unicomm-57bc0`
+   * `MODEL_PATH` = `../models/SignLanguage_v2_ResidualNet.pth`
+   * `ALLOWED_HOSTS` = `*`
+   * `MONGODB_URI` = `mongodb+srv://abbu007jd_db_user:abbu007@unicommcluster.ym5hpml.mongodb.net/unicomm_db?retryWrites=true&w=majority&appName=UniCommCluster`
+   * `DATABASE_NAME` = `unicomm_db`
 
 ---
 
