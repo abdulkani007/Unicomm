@@ -12,6 +12,20 @@ try:
 except Exception:
     pass
 
+try:
+    if "tensorflow" not in sys.modules:
+        _tf = types.ModuleType("tensorflow")
+        _tf_tools = types.ModuleType("tensorflow.tools")
+        _tf_docs = types.ModuleType("tensorflow.tools.docs")
+        _tf_docs.doc_controls = types.SimpleNamespace(do_not_generate_docs=lambda x: x)
+        _tf_tools.docs = _tf_docs
+        _tf.tools = _tf_tools
+        sys.modules["tensorflow"] = _tf
+        sys.modules["tensorflow.tools"] = _tf_tools
+        sys.modules["tensorflow.tools.docs"] = _tf_docs
+except Exception:
+    pass
+
 from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
