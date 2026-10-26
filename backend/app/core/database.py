@@ -19,6 +19,22 @@ if not mongodb_uri:
 client = None
 db = None
 
+import uuid
+
+class LocalInsertResult:
+    def __init__(self, inserted_id):
+        self.inserted_id = inserted_id
+
+class LocalUpdateResult:
+    def __init__(self, modified_count=1, matched_count=1, upserted_id=None):
+        self.modified_count = modified_count
+        self.matched_count = matched_count
+        self.upserted_id = upserted_id
+
+class LocalDeleteResult:
+    def __init__(self, deleted_count=1):
+        self.deleted_count = deleted_count
+
 class LocalFallbackCollection:
     def __init__(self, name):
         self.name = name
@@ -26,6 +42,16 @@ class LocalFallbackCollection:
         self.list_store = []
 
     def find_one(self, filter, projection=None):
+        if not filter:
+            return self.list_store[0] if self.list_store else None
+        for doc in self.list_store:
+            matches = True
+            for k, v in filter.items():
+                if doc.get(k) != v:
+                    matches = False
+                    break
+            if matches:
+                return doc
         uid = filter.get("uid") or filter.get("userId") or filter.get("user_id")
         if uid in self.store:
             return self.store[uid]
@@ -37,19 +63,39 @@ class LocalFallbackCollection:
         if uid not in self.store:
             self.store[uid] = {}
         self.store[uid].update(set_data)
-        return True
+        for doc in self.list_store:
+            matches = True
+            for k, v in filter.items():
+                if doc.get(k) != v:
+                    matches = False
+                    break
+            if matches:
+                doc.update(set_data)
+                break
+        return LocalUpdateResult()
 
     def insert_one(self, document):
+        doc_id = str(uuid.uuid4())
+        document["_id"] = doc_id
         self.list_store.append(document)
-        document["_id"] = "local_id"
         uid = document.get("userId") or document.get("user_id") or document.get("uid")
         if uid:
             self.store[uid] = document
-        return document
+        return LocalInsertResult(doc_id)
 
     def find(self, filter, projection=None):
-        uid = filter.get("userId") or filter.get("user_id") or filter.get("uid")
-        results = [doc for doc in self.list_store if doc.get("userId") == uid or doc.get("user_id") == uid or doc.get("uid") == uid] if uid else self.list_store
+        if not filter:
+            results = list(self.list_store)
+        else:
+            results = []
+            for doc in self.list_store:
+                matches = True
+                for k, v in filter.items():
+                    if doc.get(k) != v:
+                        matches = False
+                        break
+                if matches:
+                    results.append(doc)
         class LocalCursor:
             def __init__(self, data):
                 self.data = data
@@ -64,10 +110,21 @@ class LocalFallbackCollection:
         return LocalCursor(results)
 
     def count_documents(self, filter):
-        return len(self.list_store)
+        if not filter:
+            return len(self.list_store)
+        count = 0
+        for doc in self.list_store:
+            matches = True
+            for k, v in filter.items():
+                if doc.get(k) != v:
+                    matches = False
+                    break
+            if matches:
+                count += 1
+        return count
 
     def delete_one(self, filter):
-        return True
+        return LocalDeleteResult(deleted_count=1)
 
     def create_index(self, *args, **kwargs):
         pass
